@@ -55,24 +55,6 @@ export default function TeachersTab() {
         setSelectedTeacherId(id);
         showToast(`Öğretmen ${newTeacher.name} sisteme eklendi.`, "success");
       }
-
-      // Automatically sort teachers by branch popularity (count descending)
-      const branchCounts: Record<string, number> = {};
-      draft.teachers.forEach((t) => {
-        const br = t.branch.trim().toLowerCase();
-        branchCounts[br] = (branchCounts[br] || 0) + 1;
-      });
-
-      draft.teachers.sort((a, b) => {
-        const countA = branchCounts[a.branch.trim().toLowerCase()] || 0;
-        const countB = branchCounts[b.branch.trim().toLowerCase()] || 0;
-        if (countB !== countA) {
-          return countB - countA; // popular branches first
-        }
-        const branchCompare = a.branch.localeCompare(b.branch);
-        if (branchCompare !== 0) return branchCompare;
-        return a.name.localeCompare(b.name);
-      });
     });
 
     setNewTeacher({ name: "", branch: "", shortName: "", homeroomClass: "" });
@@ -246,7 +228,7 @@ export default function TeachersTab() {
             <span>Kayıtlı Öğretmenler ({state.teachers.length})</span>
           </h2>
           <span className="text-xs text-slate-400 font-semibold">
-            Branş yoğunluğuna göre varsayılan sıralıdır
+            Sıralama eklenme sırasına göredir
           </span>
         </div>
 
@@ -318,17 +300,8 @@ export default function TeachersTab() {
                       <td className="py-1.5 px-3 text-center font-bold text-slate-500 border border-slate-200 font-mono">
                         {index + 1}
                       </td>
-                      <td className="py-1.5 px-3 font-bold text-slate-800 hover:text-indigo-600 transition cursor-pointer border border-slate-200" onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveTab("schedule");
-                        setScheduleViewMode("teacher");
-                        setViewingEntityId(teacher.id);
-                        showToast(`"${teacher.name}" öğretmeninin haftalık ders programı açıldı.`, "info");
-                      }}>
-                        <span className="hover:underline flex items-center gap-1.5" title="Haftalık ders programını görmek için tıklayın">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{teacher.name}</span>
-                        </span>
+                      <td className="py-1.5 px-3 font-bold text-slate-800 border border-slate-200">
+                        <span>{teacher.name}</span>
                       </td>
                       <td className="py-1.5 px-3 border border-slate-200">
                         <span className="font-bold text-slate-700">
