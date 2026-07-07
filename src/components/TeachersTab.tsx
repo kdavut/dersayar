@@ -325,18 +325,6 @@ export default function TeachersTab() {
                       <td className="py-1.5 px-3 text-right border border-slate-200" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center justify-end space-x-1">
                           <button
-                            onClick={() => {
-                              setActiveTab("schedule");
-                              setScheduleViewMode("teacher");
-                              setViewingEntityId(teacher.id);
-                              showToast(`"${teacher.name}" öğretmeninin haftalık ders programı açıldı.`, "info");
-                            }}
-                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition"
-                            title="Ders Programını Gör"
-                          >
-                            <Calendar className="w-4 h-4" />
-                          </button>
-                          <button
                             onClick={() => handleEditTeacher(teacher)}
                             className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition"
                             title="Düzelt"
