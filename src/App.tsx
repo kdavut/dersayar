@@ -245,6 +245,20 @@ export default function App() {
     }
   }, [user, loadFromCloud]);
 
+  // Auto-save to cloud every 20 minutes if there are unsaved changes
+  useEffect(() => {
+    if (!user || isSynced) return;
+
+    const intervalId = setInterval(() => {
+      const currentStore = useAppStore.getState();
+      if (currentStore.user && !currentStore.historyState.isSynced) {
+        currentStore.saveToCloud();
+      }
+    }, 20 * 60 * 1000); // 20 minutes
+
+    return () => clearInterval(intervalId);
+  }, [user, isSynced]);
+
   // Local schedule states moved to ScheduleTab.tsx
   const [showUnsavedLogoutModal, setShowUnsavedLogoutModal] = useState(false);
   const [isSavingAndExiting, setIsSavingAndExiting] = useState(false);
