@@ -105,6 +105,13 @@
   position: relative;
 }
 
+.highlight-orange-border {
+  border: 4px solid #f97316 !important;
+  box-shadow: 0 0 0 2px #ea580c, inset 0 0 8px rgba(249, 115, 22, 0.5) !important;
+  z-index: 40 !important;
+  position: relative;
+}
+
 /* -------------------------------------------------------------
    PRINT MEDIA RULES FOR PROFESSIONAL A4 PORTRAIT / LANDSCAPE
    ------------------------------------------------------------- */
