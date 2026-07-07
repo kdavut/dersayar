@@ -1336,6 +1336,25 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
     setSearchQuery("");
   }, [scheduleViewMode, setSearchQuery]);
 
+  // Automatically select the first assignment of the selected teacher or class
+  useEffect(() => {
+    if (scheduleViewMode === "teacher" && viewingEntityId) {
+      const teacherAssignments = state.assignments.filter(a => a.teacherId && a.teacherId.split(",").includes(viewingEntityId));
+      if (teacherAssignments.length > 0) {
+        setSelectedAssignmentId(teacherAssignments[0].id);
+      } else {
+        setSelectedAssignmentId("");
+      }
+    } else if (scheduleViewMode === "class" && viewingEntityId) {
+      const classAssignments = state.assignments.filter(a => a.classId === viewingEntityId);
+      if (classAssignments.length > 0) {
+        setSelectedAssignmentId(classAssignments[0].id);
+      } else {
+        setSelectedAssignmentId("");
+      }
+    }
+  }, [viewingEntityId, scheduleViewMode, state.assignments, setSelectedAssignmentId]);
+
   // Handle outside click to dismiss context menus
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -1804,6 +1823,65 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                                 // Determine active status and color coding
                                 const activeStatus = getCellStatusForActiveAssignment(dIdx, pIdx);
+
+                                const isAssignmentPartiallyPlaced = !!(currentActiveAssignment && getAssignmentPlacedHours(currentActiveAssignment.id) < currentActiveAssignment.weeklyHours);
+
+                                const canAssignToCell = (() => {
+                                  if (!currentActiveAssignment) return false;
+                                  const isAlreadyAssignedInThisCell = slot && slot.assignmentId === currentActiveAssignment.id;
+                                  if (isAlreadyAssignedInThisCell) return false;
+
+                                  // 1. Daily periods limit for the class of the assignment
+                                  const targetClassObj = classesMap.get(currentActiveAssignment.classId);
+                                  if (targetClassObj && targetClassObj.dailyPeriods) {
+                                    const maxPeriodsThisDay = targetClassObj.dailyPeriods[dIdx];
+                                    if (maxPeriodsThisDay !== undefined && pIdx >= maxPeriodsThisDay) {
+                                      return false;
+                                    }
+                                  }
+
+                                  // 2. Unavailability locks
+                                  // a) Teacher unavailability
+                                  const tIds = currentActiveAssignment.teacherId 
+                                    ? currentActiveAssignment.teacherId.split(",").map(id => id.trim()).filter(Boolean) 
+                                    : [];
+                                  for (const tId of tIds) {
+                                    const teacherObj = teachersMap.get(tId);
+                                    if (teacherObj && teacherObj.unavailability?.[dIdx]?.[pIdx]) {
+                                      return false;
+                                    }
+                                  }
+
+                                  // b) Class unavailability
+                                  if (targetClassObj && targetClassObj.unavailability?.[dIdx]?.[pIdx]) {
+                                    return false;
+                                  }
+
+                                  // c) Classroom unavailability
+                                  if (currentActiveAssignment.classroomId) {
+                                    const classroomObj = classroomsMap.get(currentActiveAssignment.classroomId);
+                                    if (classroomObj && classroomObj.unavailability?.[dIdx]?.[pIdx]) {
+                                      return false;
+                                    }
+                                  }
+
+                                  // 3. Busy states (Teacher busy elsewhere in another class)
+                                  for (const tId of tIds) {
+                                    for (const otherClassId of Object.keys(state.schedule)) {
+                                      if (otherClassId === currentActiveAssignment.classId) continue;
+                                      const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
+                                      if (otherSlot && otherSlot.teacherId) {
+                                        const otherTIds = otherSlot.teacherId.split(",").map(id => id.trim()).filter(Boolean);
+                                        if (otherTIds.includes(tId)) {
+                                          return false;
+                                        }
+                                      }
+                                    }
+                                  }
+
+                                  return true;
+                                })();
+
                                 let cellStyle = "";
 
                                 if (cellIsImpossiblePeriod) {
@@ -1865,6 +1943,8 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                                 if (slot && selectedAssignmentId === slot.assignmentId) {
                                   cellStyle += " highlight-yellow-border ring-2 ring-yellow-400/80 z-30 shadow-lg shadow-yellow-200/40 scale-[1.02]";
+                                } else if (selectedAssignmentId && isAssignmentPartiallyPlaced && canAssignToCell) {
+                                  cellStyle += " highlight-orange-border ring-2 ring-orange-500/80 z-30 shadow-lg shadow-orange-200/40 scale-[1.01]";
                                 }
 
                                 // Define typography colors depending on background
