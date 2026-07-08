@@ -23,6 +23,10 @@ export interface ProgressUpdate {
   currentScore?: number;
   unplacedCount?: number;
   reports?: string[];
+  bestSchedule?: ClassScheduleMap;
+  totalHours?: number;
+  placedHours?: number;
+  unplacedHours?: number;
 }
 
 /**
@@ -686,6 +690,15 @@ export function diagnoseUnplacedAssignment(
   return { reason, suggestions };
 }
 
+let activeWorker: Worker | null = null;
+
+export function stopActiveScheduler() {
+  if (activeWorker) {
+    activeWorker.terminate();
+    activeWorker = null;
+  }
+}
+
 /**
  * Completely asynchronous scheduling solver combining Multi-Start Randomized CSP Backtracking
  * followed by Simulated Annealing local search. Never violates hard constraints.
@@ -710,10 +723,13 @@ export async function generateAutomaticScheduleAsync(
 }> {
   return new Promise((resolve, reject) => {
     try {
+      stopActiveScheduler();
+
       const worker = new Worker(
         new URL("./scheduler.worker.ts", import.meta.url),
         { type: "module" }
       );
+      activeWorker = worker;
 
       worker.onmessage = (event) => {
         const { type, progress, result } = event.data;
@@ -722,6 +738,9 @@ export async function generateAutomaticScheduleAsync(
             onProgress(progress);
           }
         } else if (type === "result") {
+          if (activeWorker === worker) {
+            activeWorker = null;
+          }
           worker.terminate();
 
           if (result && result.schedule) {
@@ -807,6 +826,9 @@ export async function generateAutomaticScheduleAsync(
 
       worker.onerror = (err) => {
         console.error("Web Worker error:", err);
+        if (activeWorker === worker) {
+          activeWorker = null;
+        }
         worker.terminate();
         reject(err);
       };
