@@ -776,6 +776,9 @@ self.onmessage = async (e: MessageEvent) => {
   });
 
   const getBlockPriority = (b: BlockToPlace) => {
+    if (options?.priorityAssignmentIds && options.priorityAssignmentIds.includes(b.assignment.id)) {
+      return 0;
+    }
     const isMultiTeacher = b.assignment.teacherId && b.assignment.teacherId.split(",").length > 1;
     if (isMultiTeacher) return 1;
     
