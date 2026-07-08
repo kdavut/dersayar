@@ -100,6 +100,22 @@ function isPlacementValidEx(
         if (occupiedByClassId && occupiedByClassId !== assignment.classId && occupiedByClassId !== classIdToIgnoreTeacherCheck) {
           return false;
         }
+
+        // 3. Direct Teacher Occupancy Scan (Guarantees zero double-booking)
+        for (const cId of Object.keys(tempSchedule)) {
+          if (cId === assignment.classId || (classIdToIgnoreTeacherCheck && cId === classIdToIgnoreTeacherCheck)) {
+            continue;
+          }
+          const classSched = tempSchedule[cId];
+          if (!classSched) continue;
+          const slot = classSched[dayIndex]?.[p];
+          if (slot && slot.teacherId) {
+            const existingTeacherIds = slot.teacherId.split(",");
+            if (existingTeacherIds.includes(tId)) {
+              return false;
+            }
+          }
+        }
       }
     }
 
@@ -1000,7 +1016,22 @@ self.onmessage = async (e: MessageEvent) => {
                   break;
                 }
 
-                const occupiedByClassId = currentTeacherOccupancy[tId]?.[d]?.[period];
+                let occupiedByClassId = currentTeacherOccupancy[tId]?.[d]?.[period];
+                if (!occupiedByClassId) {
+                  // Direct scan fallback to make sure we find any other class where the teacher is teaching at this period
+                  for (const cId of Object.keys(currentSchedule)) {
+                    if (cId === classId) continue;
+                    const slot = currentSchedule[cId]?.[d]?.[period];
+                    if (slot && slot.teacherId) {
+                      const otherTIds = slot.teacherId.split(",");
+                      if (otherTIds.includes(tId)) {
+                        occupiedByClassId = cId;
+                        break;
+                      }
+                    }
+                  }
+                }
+
                 if (occupiedByClassId && occupiedByClassId !== classId) {
                   const occupiedSlot = currentSchedule[occupiedByClassId]?.[d]?.[period];
                   if (occupiedSlot) {
@@ -1159,7 +1190,7 @@ self.onmessage = async (e: MessageEvent) => {
     });
 
     const unplacedHoursThisTrial = finalUnplacedHoursList.reduce((sum, b) => sum + b.size, 0);
-    const softPenaltyThisTrial = calculateScheduleScore(currentSchedule, state, teachersMap, classesMap, classroomsMap, coursesMap);
+    let softPenaltyThisTrial = calculateScheduleScore(currentSchedule, state, teachersMap, classesMap, classroomsMap, coursesMap);
 
     // Evaluate trial success
     if (unplacedHoursThisTrial < bestGlobalUnplacedHours || (unplacedHoursThisTrial === bestGlobalUnplacedHours && softPenaltyThisTrial < bestGlobalPenalty)) {
@@ -1266,8 +1297,9 @@ self.onmessage = async (e: MessageEvent) => {
               const delta = newPenalty - softPenaltyThisTrial;
 
               if (delta <= 0 || Math.random() < Math.exp(-delta / temp)) {
-                bestGlobalPenalty = newPenalty;
+                softPenaltyThisTrial = newPenalty;
                 if (newPenalty < bestGlobalPenalty) {
+                  bestGlobalPenalty = newPenalty;
                   bestGlobalSchedule = cloneSchedule(currentSchedule);
                 }
               } else {
