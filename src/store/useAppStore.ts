@@ -805,25 +805,7 @@ export const useAppStore = create<AppStore>((set) => ({
       // Create a deep copy of the best schedule found so far
       const lockedSchedule = JSON.parse(JSON.stringify(progress.bestSchedule));
       
-      // Mark all placed non-null slots as isLocked: true
-      for (const classId of Object.keys(lockedSchedule)) {
-        const classSched = lockedSchedule[classId];
-        if (classSched) {
-          for (const day of Object.keys(classSched)) {
-            const dayIndex = parseInt(day);
-            const slots = classSched[dayIndex];
-            if (slots) {
-              for (let p = 0; p < slots.length; p++) {
-                if (slots[p]) {
-                  slots[p].isLocked = true;
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // Update state's schedule with this locked best-intermediate schedule
+      // Update state's schedule with this best-intermediate schedule (without auto-locking all slots)
       store.updateState((draft) => {
         draft.schedule = lockedSchedule;
       });
@@ -874,7 +856,7 @@ export const useAppStore = create<AppStore>((set) => ({
       }
 
       store.setUnplacedReports(unplacedReports);
-      store.showToast("Planlama işlemi durduruldu. Mevcut yerleşimler kilitlendi ve korundu.", "info");
+      store.showToast("Planlama işlemi durduruldu. Mevcut yerleşimler korundu.", "info");
     } else {
       store.showToast("Planlama işlemi durduruldu.", "info");
     }
@@ -924,11 +906,34 @@ export const useAppStore = create<AppStore>((set) => ({
 
       if (result.success) {
         store.showToast(result.message, "success");
+        store.setIsAnalysisOpen(false);
       } else {
-        if (result.unplacedDetails && result.unplacedDetails.length > 0) {
-          store.setIsAnalysisOpen(true);
+        // Check if we were targeting a specific teacher (Öğretmen bazlı yerleştirme)
+        const targetedTeacherIds = targets?.teacherIds;
+        const isTeacherTargeted = targetedTeacherIds && targetedTeacherIds.length > 0;
+        let targetedTeacherFullyPlaced = false;
+
+        if (isTeacherTargeted) {
+          const teacherId = targetedTeacherIds[0];
+          const teacherHasUnplaced = result.unplacedReports?.some((report: any) => {
+            const ids = report.teacherId ? report.teacherId.split(",").map((s: string) => s.trim()) : [];
+            return ids.includes(teacherId);
+          });
+          if (!teacherHasUnplaced) {
+            targetedTeacherFullyPlaced = true;
+          }
         }
-        store.showToast(result.message, "info");
+
+        if (targetedTeacherFullyPlaced) {
+          const teacherName = preparedState.teachers.find(t => t.id === targetedTeacherIds[0])?.name || "Öğretmen";
+          store.showToast(`"${teacherName}" isimli öğretmenin tüm dersleri başarıyla yerleştirildi!`, "success");
+          store.setIsAnalysisOpen(false);
+        } else {
+          if (result.unplacedDetails && result.unplacedDetails.length > 0) {
+            store.setIsAnalysisOpen(true);
+          }
+          store.showToast(result.message, "info");
+        }
       }
     } catch (err) {
       console.error(err);
