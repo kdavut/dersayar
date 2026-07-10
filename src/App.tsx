@@ -77,7 +77,8 @@ import ScheduleTab from "./components/ScheduleTab";
 import {
   optimizeGapsForTeacher as runOptimizeGapsForTeacher,
   optimizeGapsForAllTeachers as runOptimizeGapsForAllTeachers,
-  removeSingleLessonDays as runRemoveSingleLessonDays
+  removeSingleLessonDays as runRemoveSingleLessonDays,
+  removeSingleLessonDaysForTeacher as runRemoveSingleLessonDaysForTeacher
 } from "./utils/gapOptimizer";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
@@ -952,6 +953,18 @@ export default function App() {
 
   const removeSingleLessonDays = () => {
     const res = runRemoveSingleLessonDays(state);
+    if (res.success && res.schedule) {
+      updateState((draft) => {
+        draft.schedule = res.schedule!;
+      });
+      showToast(res.message, "success");
+    } else {
+      showToast(res.message, res.type);
+    }
+  };
+
+  const removeSingleLessonDaysForTeacher = (teacherId: string) => {
+    const res = runRemoveSingleLessonDaysForTeacher(state, teacherId);
     if (res.success && res.schedule) {
       updateState((draft) => {
         draft.schedule = res.schedule!;
@@ -2581,6 +2594,7 @@ export default function App() {
                 optimizeGapsForTeacher={optimizeGapsForTeacher}
                 optimizeGapsForAllTeachers={optimizeGapsForAllTeachers}
                 removeSingleLessonDays={removeSingleLessonDays}
+                removeSingleLessonDaysForTeacher={removeSingleLessonDaysForTeacher}
                 handleClearSchedule={handleClearSchedule}
                 handleClearAllTeachersSchedule={handleClearAllTeachersSchedule}
                 handleClearTeacherLessons={handleClearTeacherLessons}

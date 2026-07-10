@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Activity } from "lucide-react";
 import { useAppStore } from "../store/useAppStore";
+import { isChefOrCoordinatorCourse } from "../utils/scheduler";
 
 export default function RealtimeStatusTab() {
   const { historyState } = useAppStore();
@@ -51,17 +52,7 @@ export default function RealtimeStatusTab() {
     if (!slot) return false;
     const course = state.courses.find(c => c.id === slot.courseId);
     if (!course) return false;
-    const nameLower = (course.name || "").toLowerCase();
-    const codeLower = (course.code || "").toLowerCase();
-    return !(
-      nameLower.includes("şef") || 
-      nameLower.includes("sef") || 
-      nameLower.includes("koor") || 
-      nameLower.includes("koordinatör") ||
-      codeLower.includes("şef") ||
-      codeLower.includes("sef") ||
-      codeLower.includes("koor")
-    );
+    return !isChefOrCoordinatorCourse(course.name, course.code);
   };
 
   // Categorize teachers

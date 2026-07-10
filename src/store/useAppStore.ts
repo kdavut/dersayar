@@ -2,7 +2,7 @@ import React from 'react';
 import { create } from 'zustand';
 import { AppState, FullHistoryState } from '../types';
 import { generateDemoState, createEmptyUnavailability } from '../utils/demoData';
-import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler } from '../utils/scheduler';
+import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler, getDefaultMaxDepth } from '../utils/scheduler';
 
 const LOCAL_STORAGE_KEY = "okul_ders_programi_state";
 
@@ -782,14 +782,55 @@ export const useAppStore = create<AppStore>((set) => ({
 
   dersleri_yerleştir: async (preparedState, keepExisting, targets) => {
     const store = useAppStore.getState();
+
+    // Determine target teacher or class names for the progress dialog
+    let targetTeacherName = "";
+    let targetClassName = "";
+    if (targets?.teacherIds && targets.teacherIds.length > 0) {
+      if (targets.teacherIds.length === 1) {
+        const teacher = preparedState.teachers.find(t => t.id === targets.teacherIds![0]);
+        if (teacher) {
+          targetTeacherName = teacher.name;
+        }
+      } else if (targets.teacherIds.length === preparedState.teachers.length) {
+        targetTeacherName = "Tüm Öğretmenler";
+      } else {
+        targetTeacherName = "Seçili Öğretmenler";
+      }
+    } else if (targets?.classIds && targets.classIds.length > 0) {
+      if (targets.classIds.length === 1) {
+        const clazz = preparedState.classes.find(c => c.id === targets.classIds![0]);
+        if (clazz) {
+          targetClassName = clazz.name;
+        }
+      } else {
+        targetClassName = "Seçili Sınıflar";
+      }
+    } else if (store.scheduleViewMode === "teacher" && store.viewingEntityId) {
+      const teacher = preparedState.teachers.find(t => t.id === store.viewingEntityId);
+      if (teacher) {
+        targetTeacherName = teacher.name;
+      }
+    } else if (store.scheduleViewMode === "class" && store.viewingEntityId) {
+      const clazz = preparedState.classes.find(c => c.id === store.viewingEntityId);
+      if (clazz) {
+        targetClassName = clazz.name;
+      }
+    }
+
     const result = await generateAutomaticScheduleAsync(preparedState, (progress) => {
-      store.setSchedulingProgress(progress);
+      store.setSchedulingProgress({
+        ...progress,
+        targetTeacherName: targetTeacherName || progress.targetTeacherName,
+        targetClassName: targetClassName || progress.targetClassName
+      });
     }, {
       keepExisting,
       targetClassIds: targets?.classIds,
       targetTeacherIds: targets?.teacherIds,
       deepSearch: store.deepSearch,
-      numTrials: store.numTrials
+      numTrials: store.numTrials,
+      maxDepth: preparedState.settings.maxDepth ?? getDefaultMaxDepth(preparedState.teachers.length)
     });
     return result;
   },
@@ -868,12 +909,49 @@ export const useAppStore = create<AppStore>((set) => ({
   runAutomaticScheduler: async (keepExisting, targets) => {
     const store = useAppStore.getState();
     
+    // Determine target teacher or class names early
+    let targetTeacherName = "";
+    let targetClassName = "";
+    if (targets?.teacherIds && targets.teacherIds.length > 0) {
+      if (targets.teacherIds.length === 1) {
+        const teacher = store.historyState.current.teachers?.find((t: any) => t.id === targets.teacherIds![0]);
+        if (teacher) {
+          targetTeacherName = teacher.name;
+        }
+      } else if (targets.teacherIds.length === store.historyState.current.teachers?.length) {
+        targetTeacherName = "Tüm Öğretmenler";
+      } else {
+        targetTeacherName = "Seçili Öğretmenler";
+      }
+    } else if (targets?.classIds && targets.classIds.length > 0) {
+      if (targets.classIds.length === 1) {
+        const clazz = store.historyState.current.classes?.find((c: any) => c.id === targets.classIds![0]);
+        if (clazz) {
+          targetClassName = clazz.name;
+        }
+      } else {
+        targetClassName = "Seçili Sınıflar";
+      }
+    } else if (store.scheduleViewMode === "teacher" && store.viewingEntityId) {
+      const teacher = store.historyState.current.teachers?.find((t: any) => t.id === store.viewingEntityId);
+      if (teacher) {
+        targetTeacherName = teacher.name;
+      }
+    } else if (store.scheduleViewMode === "class" && store.viewingEntityId) {
+      const clazz = store.historyState.current.classes?.find((c: any) => c.id === store.viewingEntityId);
+      if (clazz) {
+        targetClassName = clazz.name;
+      }
+    }
+
     store.setIsScheduling(true);
     store.setSchedulingProgress({
       phase: "backtracking",
       percent: 5,
       message: "Veriler hazırlanıyor...",
-      steps: 0
+      steps: 0,
+      targetTeacherName,
+      targetClassName
     });
     store.setUnplacedReports([]);
     store.setIsSchedulingOptionsOpen(false);
@@ -882,7 +960,22 @@ export const useAppStore = create<AppStore>((set) => ({
       // 1. Prepare data
       const preparedState = await store.verileri_hazırla();
       
-      const totalHours = preparedState.assignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+      // Calculate totalHours targeted or global
+      let totalHours = 0;
+      if (targets?.teacherIds && targets.teacherIds.length > 0) {
+        const targetAssignments = preparedState.assignments.filter((a: any) => {
+          if (!a.teacherId) return false;
+          const tIds = a.teacherId.split(",");
+          return tIds.some((id: string) => targets.teacherIds!.includes(id));
+        });
+        totalHours = targetAssignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+      } else if (targets?.classIds && targets.classIds.length > 0) {
+        const targetAssignments = preparedState.assignments.filter((a: any) => targets.classIds!.includes(a.classId));
+        totalHours = targetAssignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+      } else {
+        totalHours = preparedState.assignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+      }
+
       store.setSchedulingProgress({
         phase: "backtracking",
         percent: 10,
@@ -890,7 +983,9 @@ export const useAppStore = create<AppStore>((set) => ({
         steps: 0,
         totalHours,
         placedHours: 0,
-        unplacedHours: totalHours
+        unplacedHours: totalHours,
+        targetTeacherName,
+        targetClassName
       });
 
       // 2. Run placement

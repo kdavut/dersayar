@@ -27,6 +27,64 @@ export interface ProgressUpdate {
   steps: number;
   currentScore?: number;
   unplacedCount?: number;
+  reports?: string[];
+  bestSchedule?: ClassScheduleMap;
+  totalHours?: number;
+  placedHours?: number;
+  unplacedHours?: number;
+  targetTeacherName?: string;
+  targetClassName?: string;
+}
+
+let lockedAssignmentIds = new Set<string>();
+
+function parseTeacherIds(teacherIdStr: string | null | undefined): string[] {
+  if (!teacherIdStr) return [];
+  return teacherIdStr
+    .split(/[\s,;]+/)
+    .map(id => id.trim())
+    .filter(Boolean);
+}
+
+function isChefOrCoordinatorCourse(courseName: string, courseCode: string): boolean {
+  const nameLower = (courseName || "").toLowerCase().trim();
+  const codeLower = (courseCode || "").toLowerCase().trim();
+
+  // Whitelist exception: if name or code includes felsefe, fel, fls, etc., it is definitely NOT a chef or coordinator course
+  if (
+    nameLower.includes("felsefe") || 
+    nameLower.includes("fel") || 
+    nameLower.includes("fls") ||
+    codeLower.includes("fel") || 
+    codeLower.includes("fls") || 
+    codeLower.includes("felsefe")
+  ) {
+    return false;
+  }
+
+  // Regular expression to check for precise word match of şef, sef, koor, koordinatör, koordinatörlük, şeflik, şefliği
+  const pattern = /(?:^|[^a-zıüşöçğ])(şef|sef|koor|koordinatör|koordinatörlük|şefliği|şeflik)(?:$|[^a-zıüşöçğ])/i;
+  
+  return pattern.test(nameLower) || pattern.test(codeLower);
+}
+
+function isGeneralCultureCourse(courseName: string, courseCode: string): boolean {
+  const nameLower = (courseName || "").toLowerCase().trim();
+  const codeLower = (courseCode || "").toLowerCase().trim();
+
+  // If it's chef or coordinator duty, it's NOT a general culture course (it's teacher duty/coordination)
+  if (isChefOrCoordinatorCourse(courseName, courseCode)) {
+    return false;
+  }
+
+  const keywords = [
+    "matematik", "geometri", "fizik", "kimya", "biyoloji", "tarih", "coğrafya", "edebiyat", 
+    "türk dili", "ingilizce", "almanca", "yabancı dil", "din kültürü", "felsefe", "müzik", 
+    "resim", "görsel sanatlar", "beden eğitimi", "sağlık bilgisi", "rehberlik", "fel", "türkçe",
+    "coğ", "tar", "mat", "fiz", "kim", "biyo", "ing", "alm", "dkab", "din", "görsel", "müz", "bed"
+  ];
+
+  return keywords.some(kw => nameLower.includes(kw) || codeLower.includes(kw));
 }
 
 /**
@@ -87,7 +145,7 @@ function isPlacementValidEx(
 
     // Teacher unavailability and O(1) collision check
     if (assignment.teacherId) {
-      const teacherIds = assignment.teacherId.split(",");
+      const teacherIds = parseTeacherIds(assignment.teacherId);
       for (let i = 0; i < teacherIds.length; i++) {
         const tId = teacherIds[i];
         
@@ -97,24 +155,8 @@ function isPlacementValidEx(
 
         // 2. Teacher Occupancy Check (O(1))
         const occupiedByClassId = teacherOccupancy[tId]?.[dayIndex]?.[p];
-        if (occupiedByClassId && occupiedByClassId !== assignment.classId && occupiedByClassId !== classIdToIgnoreTeacherCheck) {
+        if (occupiedByClassId !== null && occupiedByClassId !== undefined && occupiedByClassId !== assignment.classId && occupiedByClassId !== classIdToIgnoreTeacherCheck) {
           return false;
-        }
-
-        // 3. Direct Teacher Occupancy Scan (Guarantees zero double-booking)
-        for (const cId of Object.keys(tempSchedule)) {
-          if (cId === assignment.classId || (classIdToIgnoreTeacherCheck && cId === classIdToIgnoreTeacherCheck)) {
-            continue;
-          }
-          const classSched = tempSchedule[cId];
-          if (!classSched) continue;
-          const slot = classSched[dayIndex]?.[p];
-          if (slot && slot.teacherId) {
-            const existingTeacherIds = slot.teacherId.split(",");
-            if (existingTeacherIds.includes(tId)) {
-              return false;
-            }
-          }
         }
       }
     }
@@ -220,7 +262,7 @@ function calculateScheduleScore(
         classCourseDayPeriods[classId][slot.courseId][d].push(p);
 
         if (slot.teacherId) {
-          const tIds = slot.teacherId.split(",");
+          const tIds = parseTeacherIds(slot.teacherId);
           for (let i = 0; i < tIds.length; i++) {
             const tId = tIds[i];
             if (teacherDayPeriods[tId]) {
@@ -250,7 +292,8 @@ function calculateScheduleScore(
         for (let p = minP; p <= maxP; p++) {
           if (!periods.has(p)) gaps++;
         }
-        teacherGapsPenalty += gaps * 15;
+        // Öğretmen boşlukları (gaps) 'Yumuşak Kısıt' yerine 'Öncelikli Kısıt' olarak işaretlendi. Ceza katsayısı 1000'e çıkarıldı.
+        teacherGapsPenalty += gaps * 1000;
       }
     }
   }
@@ -406,7 +449,7 @@ function registerOccupancy(
   classroomOccupancy: Record<string, (string | null)[][]>
 ) {
   if (slot.teacherId) {
-    const tIds = slot.teacherId.split(",");
+    const tIds = parseTeacherIds(slot.teacherId);
     for (let i = 0; i < tIds.length; i++) {
       const tId = tIds[i];
       if (!teacherOccupancy[tId]) {
@@ -437,7 +480,7 @@ function clearOccupancy(
   classroomOccupancy: Record<string, (string | null)[][]>
 ) {
   if (slot.teacherId) {
-    const tIds = slot.teacherId.split(",");
+    const tIds = parseTeacherIds(slot.teacherId);
     for (let i = 0; i < tIds.length; i++) {
       const tId = tIds[i];
       if (teacherOccupancy[tId]?.[d]?.[p] === classId) {
@@ -501,13 +544,12 @@ function tryBacktrackingSwap(
 
         const slot = schedule[classId]?.[d]?.[period];
         if (slot) {
-          const isLocked = slot.isLocked === true || (() => {
-            const course = coursesMap.get(slot.courseId);
-            if (!course) return false;
-            const nameLower = (course.name || "").toLowerCase();
-            const codeLower = (course.code || "").toLowerCase();
-            return nameLower.includes("şef") || nameLower.includes("sef") || nameLower.includes("koor") || nameLower.includes("koordinatör") || codeLower.includes("şef") || codeLower.includes("sef") || codeLower.includes("koor");
-          })() || !!(priorityAssignmentIds && priorityAssignmentIds.includes(slot.assignmentId));
+          const isLocked = slot.isLocked === true || 
+            lockedAssignmentIds.has(slot.assignmentId) || (() => {
+              const course = coursesMap.get(slot.courseId);
+              if (!course) return false;
+              return isChefOrCoordinatorCourse(course.name, course.code);
+            })() || !!(priorityAssignmentIds && priorityAssignmentIds.includes(slot.assignmentId));
 
           if (isLocked) {
             canPlaceHere = false;
@@ -564,6 +606,7 @@ function tryBacktrackingSwap(
         let foundNewPlace = false;
         for (let nd = 0; nd < numDays; nd++) {
           for (let np = 0; np < numPeriods; np++) {
+            if (schedule[classId]?.[nd]?.[np] !== null) continue; // Must be empty
             if (isPlacementValidEx(state, teachersMap, classesMap, classroomsMap, schedule, teacherOccupancy, classroomOccupancy, ejectedAssign, nd, np, 1, classId)) {
               schedule[classId][nd][np] = e.slot;
               registerOccupancy(classId, nd, np, e.slot, teacherOccupancy, classroomOccupancy);
@@ -628,11 +671,89 @@ function shuffle<T>(array: T[]): T[] {
 function isSlotLocked(slot: ScheduleSlot | null, coursesMap: Map<string, Course>): boolean {
   if (!slot) return false;
   if (slot.isLocked === true) return true;
+  if (lockedAssignmentIds.has(slot.assignmentId)) return true;
   const course = coursesMap.get(slot.courseId);
   if (!course) return false;
-  const nameLower = (course.name || "").toLowerCase();
-  const codeLower = (course.code || "").toLowerCase();
-  return nameLower.includes("şef") || nameLower.includes("sef") || nameLower.includes("koor") || nameLower.includes("koordinatör") || codeLower.includes("şef") || codeLower.includes("sef") || codeLower.includes("koor");
+  return isChefOrCoordinatorCourse(course.name, course.code);
+}
+
+function validateSchedule(
+  schedule: ClassScheduleMap,
+  numDays: number,
+  numPeriods: number
+): { success: boolean; message: string } {
+  const teacherOccupancy: Record<string, Record<string, boolean>> = {};
+  const classroomOccupancy: Record<string, Record<string, boolean>> = {};
+
+  for (const cId of Object.keys(schedule)) {
+    for (let d = 0; d < numDays; d++) {
+      const daySlots = schedule[cId][d];
+      if (!daySlots) continue;
+      for (let p = 0; p < numPeriods; p++) {
+        const slot = daySlots[p];
+        if (slot) {
+          // Check Teacher Overlap
+          if (slot.teacherId) {
+            const tIds = parseTeacherIds(slot.teacherId);
+            for (const tId of tIds) {
+              const key = `${tId}-${d}-${p}`;
+              if (teacherOccupancy[tId]?.[key]) {
+                return { 
+                  success: false, 
+                  message: `Öğretmen Çakışması: Öğretmen ID ${tId}, Gün ${d}, Ders ${p + 1}` 
+                };
+              }
+              if (!teacherOccupancy[tId]) teacherOccupancy[tId] = {};
+              teacherOccupancy[tId][key] = true;
+            }
+          }
+
+          // Check Classroom Overlap
+          if (slot.classroomId) {
+            const key = `${slot.classroomId}-${d}-${p}`;
+            if (classroomOccupancy[slot.classroomId]?.[key]) {
+              return { 
+                success: false, 
+                message: `Atölye/Laboratuvar Çakışması: Atölye ID ${slot.classroomId}, Gün ${d}, Ders ${p + 1}` 
+              };
+            }
+            if (!classroomOccupancy[slot.classroomId]) classroomOccupancy[slot.classroomId] = {};
+            classroomOccupancy[slot.classroomId][key] = true;
+          }
+        }
+      }
+    }
+  }
+
+  return { success: true, message: "Aşama Doğrulaması: Başarılı. Sıfır çakışma." };
+}
+
+function getBlockTier(b: BlockToPlace, coursesMap: Map<string, Course>): number {
+  if (b.assignment.classroomId !== null) {
+    return 1; // Tier 1: Laboratuvar/Atölye
+  }
+  const course = coursesMap.get(b.assignment.courseId);
+  if (course && isGeneralCultureCourse(course.name, course.code)) {
+    return 3; // Tier 3: Genel Kültür
+  }
+  return 2; // Tier 2: Öğretmenlerin Sabit/Meslek Programı
+}
+
+function getScheduledAssignmentIds(schedule: ClassScheduleMap, numDays: number, numPeriods: number): Set<string> {
+  const ids = new Set<string>();
+  for (const cId of Object.keys(schedule)) {
+    for (let d = 0; d < numDays; d++) {
+      const daySlots = schedule[cId][d];
+      if (!daySlots) continue;
+      for (let p = 0; p < numPeriods; p++) {
+        const slot = daySlots[p];
+        if (slot) {
+          ids.add(slot.assignmentId);
+        }
+      }
+    }
+  }
+  return ids;
 }
 
 self.onmessage = async (e: MessageEvent) => {
@@ -655,6 +776,7 @@ self.onmessage = async (e: MessageEvent) => {
   const classesMap = new Map<string, GradeClass>(classes.map((c: GradeClass) => [c.id, c]));
   const classroomsMap = new Map<string, Classroom>(classrooms.map((r: Classroom) => [r.id, r]));
   const coursesMap = new Map<string, Course>(courses.map((co: Course) => [co.id, co]));
+  const assignmentsMap = new Map<string, LessonAssignment>(assignments.map((a: LessonAssignment) => [a.id, a]));
 
   const baseSchedule: ClassScheduleMap = {};
 
@@ -693,9 +815,7 @@ self.onmessage = async (e: MessageEvent) => {
               const isKoorOrSef = slot && (() => {
                 const course = coursesMap.get(slot.courseId);
                 if (!course) return false;
-                const nameLower = (course.name || "").toLowerCase();
-                const codeLower = (course.code || "").toLowerCase();
-                return nameLower.includes("şef") || nameLower.includes("sef") || nameLower.includes("koor") || nameLower.includes("koordinatör") || codeLower.includes("şef") || codeLower.includes("sef") || codeLower.includes("koor");
+                return isChefOrCoordinatorCourse(course.name, course.code);
               })();
               const isLocked = (c.unavailability[d]?.[p] === true) || (slot?.isLocked === true) || !!isKoorOrSef;
               if (slot && isLocked) {
@@ -708,6 +828,115 @@ self.onmessage = async (e: MessageEvent) => {
     }
   }
 
+  // PRE-PROCESSING CONFLICT STRIPPING PASS:
+  // Detect and strip any conflicting slots from baseSchedule before starting the search process.
+  // This guarantees that pre-existing conflicts are resolved by the algorithm during planning.
+  const initialTeacherOccupancy: Record<string, (string | null)[][]> = {};
+  const initialClassroomOccupancy: Record<string, (string | null)[][]> = {};
+
+  for (const t of teachers) {
+    initialTeacherOccupancy[t.id] = [];
+    for (let d = 0; d < numDays; d++) {
+      initialTeacherOccupancy[t.id].push(Array(numPeriods).fill(null));
+    }
+  }
+  for (const r of classrooms) {
+    initialClassroomOccupancy[r.id] = [];
+    for (let d = 0; d < numDays; d++) {
+      initialClassroomOccupancy[r.id].push(Array(numPeriods).fill(null));
+    }
+  }
+
+  for (const cId of Object.keys(baseSchedule)) {
+    for (let d = 0; d < numDays; d++) {
+      for (let p = 0; p < numPeriods; p++) {
+        const slot = baseSchedule[cId][d][p];
+        if (!slot) continue;
+
+        // 1. Check Class unavailability
+        const classObj = classesMap.get(cId);
+        if (classObj?.unavailability[d]?.[p] === true) {
+          baseSchedule[cId][d][p] = null;
+          continue;
+        }
+
+        // 2. Check Classroom unavailability
+        if (slot.classroomId) {
+          const classroom = classroomsMap.get(slot.classroomId);
+          if (classroom?.unavailability[d]?.[p] === true) {
+            baseSchedule[cId][d][p] = null;
+            continue;
+          }
+        }
+
+        // 3. Check Teacher unavailability
+        if (slot.teacherId) {
+          const tIds = parseTeacherIds(slot.teacherId);
+          let hasTeacherUnavail = false;
+          for (const tId of tIds) {
+            const teacher = teachersMap.get(tId);
+            if (teacher?.unavailability[d]?.[p] === true) {
+              hasTeacherUnavail = true;
+              break;
+            }
+          }
+          if (hasTeacherUnavail) {
+            baseSchedule[cId][d][p] = null;
+            continue;
+          }
+        }
+
+        // 4. Check Teacher Occupancy for conflicts
+        if (slot.teacherId) {
+          const tIds = parseTeacherIds(slot.teacherId);
+          let hasConflict = false;
+          for (const tId of tIds) {
+            const occupiedByClassId = initialTeacherOccupancy[tId]?.[d]?.[p];
+            if (occupiedByClassId !== null && occupiedByClassId !== undefined && occupiedByClassId !== cId) {
+              hasConflict = true;
+              break;
+            }
+          }
+          if (hasConflict) {
+            // Teacher overlap conflict! Clear it from baseSchedule and also clear other conflicting class's slot
+            baseSchedule[cId][d][p] = null;
+            for (const tId of tIds) {
+              const otherCId = initialTeacherOccupancy[tId]?.[d]?.[p];
+              if (otherCId && otherCId !== cId) {
+                const otherSlot = baseSchedule[otherCId][d][p];
+                baseSchedule[otherCId][d][p] = null;
+                if (otherSlot) {
+                  clearOccupancy(otherCId, d, p, otherSlot, initialTeacherOccupancy, initialClassroomOccupancy);
+                }
+              }
+            }
+            continue;
+          }
+        }
+
+        // 5. Check Classroom Occupancy for conflicts
+        if (slot.classroomId) {
+          const occupiedByClassId = initialClassroomOccupancy[slot.classroomId]?.[d]?.[p];
+          if (occupiedByClassId !== null && occupiedByClassId !== undefined && occupiedByClassId !== cId) {
+            baseSchedule[cId][d][p] = null;
+            const otherCId = initialClassroomOccupancy[slot.classroomId]?.[d]?.[p];
+            if (otherCId && otherCId !== cId) {
+              const otherSlot = baseSchedule[otherCId][d][p];
+              baseSchedule[otherCId][d][p] = null;
+              if (otherSlot) {
+                clearOccupancy(otherCId, d, p, otherSlot, initialTeacherOccupancy, initialClassroomOccupancy);
+              }
+            }
+            continue;
+          }
+        }
+
+        // If all checks pass, register the occupancy
+        registerOccupancy(cId, d, p, slot, initialTeacherOccupancy, initialClassroomOccupancy);
+      }
+    }
+  }
+
   // Determine target assignments
   let targetAssignments = [...assignments];
   if (options?.targetClassIds) {
@@ -716,7 +945,7 @@ self.onmessage = async (e: MessageEvent) => {
   if (options?.targetTeacherIds) {
     targetAssignments = targetAssignments.filter((a: LessonAssignment) => {
       if (!a.teacherId) return false;
-      const tIds = a.teacherId.split(",");
+      const tIds = parseTeacherIds(a.teacherId);
       return tIds.some((id: string) => options.targetTeacherIds!.includes(id));
     });
   }
@@ -804,7 +1033,7 @@ self.onmessage = async (e: MessageEvent) => {
   const teacherConstraints: Record<string, number> = {};
 
   teachers.forEach((t: Teacher) => {
-    const tAss = assignments.filter((a: LessonAssignment) => a.teacherId && a.teacherId.split(",").map(id => id.trim()).includes(t.id));
+    const tAss = assignments.filter((a: LessonAssignment) => a.teacherId && parseTeacherIds(a.teacherId).includes(t.id));
     teacherTotalHours[t.id] = tAss.reduce((sum: number, a: LessonAssignment) => sum + a.weeklyHours, 0);
 
     let unavailCount = 0;
@@ -821,6 +1050,21 @@ self.onmessage = async (e: MessageEvent) => {
     teacherConstraints[t.id] = unavailCount;
   });
 
+  // Precalculate class available slots count for MCV ("en az boş saati olan")
+  const classAvailableSlotsCount: Record<string, number> = {};
+  classes.forEach((c: GradeClass) => {
+    let count = 0;
+    for (let d = 0; d < numDays; d++) {
+      const maxP = c.dailyPeriods?.[d] ?? numPeriods;
+      for (let p = 0; p < maxP; p++) {
+        if (c.unavailability[d]?.[p] !== true) {
+          count++;
+        }
+      }
+    }
+    classAvailableSlotsCount[c.id] = count;
+  });
+
   // Setup global trackers
   let bestGlobalSchedule = cloneSchedule(baseSchedule);
   let bestGlobalUnplaced: BlockToPlace[] = [...blocksToPlace];
@@ -830,17 +1074,19 @@ self.onmessage = async (e: MessageEvent) => {
   const startTime = Date.now();
   let lastRestartTime = Date.now();
   let totalIterations = 0;
+  let lastImprovementIteration = 0;
+  let consecutiveLnsRepairsWithoutImprovement = 0;
   let restartCount = 0;
 
   // Infinite Solver & Randomized Restart Loop
   while (!stopped) {
     totalIterations++;
 
-    const currentSchedule = cloneSchedule(baseSchedule);
+    let currentSchedule = cloneSchedule(baseSchedule);
 
     // Initialize high-performance occupancy grids for this trial
-    const currentTeacherOccupancy: Record<string, (string | null)[][]> = {};
-    const currentClassroomOccupancy: Record<string, (string | null)[][]> = {};
+    let currentTeacherOccupancy: Record<string, (string | null)[][]> = {};
+    let currentClassroomOccupancy: Record<string, (string | null)[][]> = {};
 
     for (const t of teachers) {
       currentTeacherOccupancy[t.id] = [];
@@ -867,37 +1113,40 @@ self.onmessage = async (e: MessageEvent) => {
       }
     }
 
-    // Shuffle and apply Tiered Priority Logic Heuristic sorting
+    // Shuffle and apply Tiered Priority Logic Heuristic sorting with MCV (Most Constrained Variable)
     const randomizedBlocks = shuffle([...blocksToPlace]);
 
     randomizedBlocks.sort((a, b) => {
+      // Priority 0: priorityAssignmentIds (for Forced Placement / "Bu Dersi Zorla") get absolute first priority
+      if (options?.priorityAssignmentIds && options.priorityAssignmentIds.length > 0) {
+        const isPriA = options.priorityAssignmentIds.includes(a.assignment.id);
+        const isPriB = options.priorityAssignmentIds.includes(b.assignment.id);
+        if (isPriA !== isPriB) {
+          return isPriA ? -1 : 1;
+        }
+      }
+
       // Priority 1: Multi-teacher lessons get absolute priority
-      const isMultiA = a.assignment.teacherId && a.assignment.teacherId.split(",").length > 1;
-      const isMultiB = b.assignment.teacherId && b.assignment.teacherId.split(",").length > 1;
+      const isMultiA = a.assignment.teacherId && parseTeacherIds(a.assignment.teacherId).length > 1;
+      const isMultiB = b.assignment.teacherId && parseTeacherIds(b.assignment.teacherId).length > 1;
       if (isMultiA !== isMultiB) {
         return isMultiA ? -1 : 1;
       }
 
-      // Priority 2: Sınıflar staja çıkıyorsa veya yüksek unavailability varsa
-      const classA = classesMap.get(a.assignment.classId);
-      const classB = classesMap.get(b.assignment.classId);
-      
-      const unavailDaysA = classA?.unavailability ? Object.values(classA.unavailability).filter(day => day && day.every(p => p === true)).length : 0;
-      const unavailDaysB = classB?.unavailability ? Object.values(classB.unavailability).filter(day => day && day.every(p => p === true)).length : 0;
-      
-      if (unavailDaysA !== unavailDaysB) {
-        return unavailDaysB - unavailDaysA;
+      // Priority 2: En az boş saati olan sınıf (MCV)
+      const availSlotsA = classAvailableSlotsCount[a.assignment.classId] ?? 999;
+      const availSlotsB = classAvailableSlotsCount[b.assignment.classId] ?? 999;
+      if (availSlotsA !== availSlotsB) {
+        return availSlotsA - availSlotsB; // Less available slots = more constrained = place first
       }
 
-      // Priority 3: Teachers with high constraints
-      const teacherIdsA = a.assignment.teacherId ? a.assignment.teacherId.split(",") : [];
-      const teacherIdsB = b.assignment.teacherId ? b.assignment.teacherId.split(",") : [];
-      
+      // Priority 3: En kısıtlı öğretmene sahip ders (MCV)
+      const teacherIdsA = parseTeacherIds(a.assignment.teacherId);
+      const teacherIdsB = parseTeacherIds(b.assignment.teacherId);
       const teacherUnavailA = teacherIdsA.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
       const teacherUnavailB = teacherIdsB.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
-      
       if (teacherUnavailA !== teacherUnavailB) {
-        return teacherUnavailB - teacherUnavailA;
+        return teacherUnavailB - teacherUnavailA; // More unavailable hours = more constrained = place first
       }
 
       // Priority 4: Larger block size first
@@ -905,18 +1154,48 @@ self.onmessage = async (e: MessageEvent) => {
         return b.size - a.size;
       }
 
+      // Priority 5: Random tie-breaker
       return Math.random() - 0.5;
     });
 
-    // Deep Backtracking Depth Limit
-    let maxBacktrackDepth = Math.min(10, 3 + restartCount);
+    // Deep Backtracking Depth Limit - use maxDepth if specified, else scale depth gradually with restartCount
+    let maxBacktrackDepth = options?.maxDepth !== undefined
+      ? options.maxDepth
+      : Math.min(15, 4 + Math.floor(restartCount / 8));
+    if (options?.maxDepth === undefined && totalIterations - lastImprovementIteration >= 500) {
+      maxBacktrackDepth += 5;
+    }
     let lastYieldTime = Date.now();
+
+    // Search step limits to prevent thrashing in bad subtrees
+    let currentTrialSteps = 0;
+    const maxTrialSteps = 1500 + (restartCount % 20) * 250; // Cycles step limit: quick trials mixed with deeper search blocks
+    const tabuList = new Map<string, number>(); // Key: `${tId}-${d}-${period}-${classId}`, Value: step number when it expires
 
     const solveStateSpace = async (
       blocks: BlockToPlace[],
       depth: number
     ): Promise<boolean> => {
       if (stopped) return false;
+
+      currentTrialSteps++;
+      if (currentTrialSteps > maxTrialSteps) {
+        return false; // Force immediate trial abort to trigger rapid restart
+      }
+
+      // Keep track of the best global schedule seen so far (Best-State Persistence & Prevention of Data Loss)
+      const currentTotalUnplaced = blocks.reduce((sum, b) => sum + b.size, 0);
+      if (currentTotalUnplaced < bestGlobalUnplacedHours) {
+        bestGlobalUnplacedHours = currentTotalUnplaced;
+        lastImprovementIteration = totalIterations;
+        consecutiveLnsRepairsWithoutImprovement = 0;
+        bestGlobalSchedule = cloneSchedule(currentSchedule);
+        bestGlobalUnplaced = blocks.map((b, bIdx) => ({
+          assignment: b.assignment,
+          size: b.size,
+          id: `${b.assignment.id}-unplaced-bt-${bIdx}`
+        }));
+      }
 
       // Yield periodically to allow stop signal and GUI updates
       if (Date.now() - lastYieldTime > 50) {
@@ -1008,31 +1287,31 @@ self.onmessage = async (e: MessageEvent) => {
             }
 
             if (block.assignment.teacherId) {
-              const tIds = block.assignment.teacherId.split(",");
+              const tIds = parseTeacherIds(block.assignment.teacherId);
+              
+              // Tabu list check: is this teacher-period-class combination tabu?
+              let isTabu = false;
+              for (const tId of tIds) {
+                const expireStep = tabuList.get(`${tId}-${d}-${period}-${classId}`);
+                if (expireStep !== undefined && currentTrialSteps < expireStep) {
+                  isTabu = true;
+                  break;
+                }
+              }
+              if (isTabu) {
+                canPlace = false;
+                break;
+              }
+
               for (const tId of tIds) {
                 const teacher = teachersMap.get(tId);
                 if (teacher?.unavailability[d]?.[period] === true) {
-                  canPlace = false;
-                  break;
+                   canPlace = false;
+                   break;
                 }
 
-                let occupiedByClassId = currentTeacherOccupancy[tId]?.[d]?.[period];
-                if (!occupiedByClassId) {
-                  // Direct scan fallback to make sure we find any other class where the teacher is teaching at this period
-                  for (const cId of Object.keys(currentSchedule)) {
-                    if (cId === classId) continue;
-                    const slot = currentSchedule[cId]?.[d]?.[period];
-                    if (slot && slot.teacherId) {
-                      const otherTIds = slot.teacherId.split(",");
-                      if (otherTIds.includes(tId)) {
-                        occupiedByClassId = cId;
-                        break;
-                      }
-                    }
-                  }
-                }
-
-                if (occupiedByClassId && occupiedByClassId !== classId) {
+                const occupiedByClassId = currentTeacherOccupancy[tId]?.[d]?.[period];
+                if (occupiedByClassId !== null && occupiedByClassId !== undefined && occupiedByClassId !== classId) {
                   const occupiedSlot = currentSchedule[occupiedByClassId]?.[d]?.[period];
                   if (occupiedSlot) {
                     if (isSlotLocked(occupiedSlot, coursesMap) || (options?.priorityAssignmentIds && options.priorityAssignmentIds.includes(occupiedSlot.assignmentId))) {
@@ -1078,9 +1357,44 @@ self.onmessage = async (e: MessageEvent) => {
         }
       }
 
-      candidates.sort((a, b) => a.conflicts.length - b.conflicts.length);
+      // Calculate constraints of current block for Empty Slot Priority and constrained-based ejection
+      const currentClassAvail = classAvailableSlotsCount[block.assignment.classId] ?? 999;
+      const currentTeacherIds = parseTeacherIds(block.assignment.teacherId);
+      const currentTeacherUnavail = currentTeacherIds.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
 
-      for (const cand of candidates) {
+      const candidatesWithScores = candidates.map(cand => {
+        if (cand.conflicts.length === 0) {
+          return { ...cand, score: 0 };
+        }
+
+        // Check if current block is more constrained than ANY of the conflicted assignments
+        let isCurrentMoreConstrained = false;
+        for (const conflict of cand.conflicts) {
+          const ejectedAssign = assignmentsMap.get(conflict.slot.assignmentId);
+          if (ejectedAssign) {
+            const ejectedClassAvail = classAvailableSlotsCount[ejectedAssign.classId] ?? 999;
+            const ejectedTeacherIds = parseTeacherIds(ejectedAssign.teacherId);
+            const ejectedTeacherUnavail = ejectedTeacherIds.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
+
+            if (currentClassAvail < ejectedClassAvail || currentTeacherUnavail > ejectedTeacherUnavail) {
+              isCurrentMoreConstrained = true;
+              break;
+            }
+          }
+        }
+
+        // High penalty if we eject without being strictly more constrained.
+        // Base ejection penalty is 1000 so that empty slots (score 0) are always prioritized.
+        const score = isCurrentMoreConstrained
+          ? 1000 + cand.conflicts.length * 10
+          : 100000 + cand.conflicts.length * 100;
+
+        return { ...cand, score };
+      });
+
+      candidatesWithScores.sort((a, b) => a.score - b.score);
+
+      for (const cand of candidatesWithScores) {
         const { d, p, conflicts } = cand;
 
         if (conflicts.length > 0 && depth >= maxBacktrackDepth) {
@@ -1105,6 +1419,30 @@ self.onmessage = async (e: MessageEvent) => {
               clearOccupancy(conflictClassId, c.d, c.p, slotToEject, currentTeacherOccupancy, currentClassroomOccupancy);
             }
           }
+        }
+
+        // Final verification using the absolute source-of-truth validator
+        const isCurrentlyValid = isPlacementValidEx(
+          state,
+          teachersMap,
+          classesMap,
+          classroomsMap,
+          currentSchedule,
+          currentTeacherOccupancy,
+          currentClassroomOccupancy,
+          block.assignment,
+          d,
+          p,
+          block.size
+        );
+
+        if (!isCurrentlyValid) {
+          // Revert ejected conflicts and move to next candidate
+          for (const backup of backupEjected) {
+            currentSchedule[backup.classId][backup.d][backup.p] = backup.slot;
+            registerOccupancy(backup.classId, backup.d, backup.p, backup.slot, currentTeacherOccupancy, currentClassroomOccupancy);
+          }
+          continue;
         }
 
         const placedSlots: { d: number; p: number }[] = [];
@@ -1149,6 +1487,14 @@ self.onmessage = async (e: MessageEvent) => {
           currentSchedule[classId][ps.d][ps.p] = null;
           if (slotToRemove) {
             clearOccupancy(classId, ps.d, ps.p, slotToRemove, currentTeacherOccupancy, currentClassroomOccupancy);
+            
+            // Mark as tabu for 10 iterations
+            if (block.assignment.teacherId) {
+              const tIds = parseTeacherIds(block.assignment.teacherId);
+              for (const tId of tIds) {
+                tabuList.set(`${tId}-${ps.d}-${ps.p}-${classId}`, currentTrialSteps + 10);
+              }
+            }
           }
         }
 
@@ -1161,7 +1507,251 @@ self.onmessage = async (e: MessageEvent) => {
       return false;
     };
 
-    const backtrackingSolved = await solveStateSpace(randomizedBlocks, 0);
+    const runLnsRepair = async (): Promise<boolean> => {
+      // 1. Collect all placed slots in bestGlobalSchedule
+      const placedSlotsList: { classId: string; d: number; p: number; slot: ScheduleSlot }[] = [];
+      for (const cId of Object.keys(bestGlobalSchedule)) {
+        for (let d = 0; d < numDays; d++) {
+          for (let p = 0; p < numPeriods; p++) {
+            const slot = bestGlobalSchedule[cId]?.[d]?.[p];
+            if (slot) {
+              placedSlotsList.push({ classId: cId, d, p, slot });
+            }
+          }
+        }
+      }
+
+      if (placedSlotsList.length === 0) return false;
+
+      // 2. Select 10% of them randomly to clear
+      const numToClear = Math.max(1, Math.floor(placedSlotsList.length * 0.1));
+      const shuffledSlots = shuffle([...placedSlotsList]);
+      const slotsToClear = shuffledSlots.slice(0, numToClear);
+
+      // Create a copy of bestGlobalSchedule to modify
+      const repairSchedule = cloneSchedule(bestGlobalSchedule);
+      const repairTeacherOccupancy: Record<string, (string | null)[][]> = {};
+      const repairClassroomOccupancy: Record<string, (string | null)[][]> = {};
+
+      for (const t of teachers) {
+        repairTeacherOccupancy[t.id] = [];
+        for (let d = 0; d < numDays; d++) {
+          repairTeacherOccupancy[t.id].push(Array(numPeriods).fill(null));
+        }
+      }
+      for (const r of classrooms) {
+        repairClassroomOccupancy[r.id] = [];
+        for (let d = 0; d < numDays; d++) {
+          repairClassroomOccupancy[r.id].push(Array(numPeriods).fill(null));
+        }
+      }
+
+      // Re-register occupancy for all slots in repairSchedule except the cleared ones
+      const clearedAssignmentHours: Record<string, number> = {};
+      const clearedAssignmentsSet = new Set<string>();
+
+      for (const cId of Object.keys(repairSchedule)) {
+        for (let d = 0; d < numDays; d++) {
+          for (let p = 0; p < numPeriods; p++) {
+            const slot = repairSchedule[cId]?.[d]?.[p];
+            if (slot) {
+              const isCleared = slotsToClear.some(sc => sc.classId === cId && sc.d === d && sc.p === p);
+              if (isCleared) {
+                repairSchedule[cId][d][p] = null;
+                clearedAssignmentHours[slot.assignmentId] = (clearedAssignmentHours[slot.assignmentId] || 0) + 1;
+                clearedAssignmentsSet.add(slot.assignmentId);
+              } else {
+                registerOccupancy(cId, d, p, slot, repairTeacherOccupancy, repairClassroomOccupancy);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Reconstruct blocks to place for the cleared slots
+      const repairBlocks: BlockToPlace[] = [];
+      let repairBlockCounter = 0;
+
+      for (const assignId of clearedAssignmentsSet) {
+        const assign = assignments.find(a => a.id === assignId);
+        if (assign) {
+          let hours = clearedAssignmentHours[assignId];
+          const prefBlock = assign.preferredBlockSize || 2;
+          while (hours > 0) {
+            const size = Math.min(prefBlock, hours);
+            repairBlocks.push({
+              assignment: assign,
+              size: size,
+              id: `repair-${assign.id}-b${repairBlockCounter++}`
+            });
+            hours -= size;
+          }
+        }
+      }
+
+      // Also append original unplaced blocks
+      const originalUnplacedBlocks = bestGlobalUnplaced.map((b, idx) => ({
+        ...b,
+        id: `repair-orig-${b.assignment.id}-b${idx}`
+      }));
+
+      const allRepairBlocks = [...repairBlocks, ...originalUnplacedBlocks];
+
+      // Sort repair blocks with MCV (Most Constrained Variable) priority
+      allRepairBlocks.sort((a, b) => {
+        if (options?.priorityAssignmentIds) {
+          const isPriA = options.priorityAssignmentIds.includes(a.assignment.id);
+          const isPriB = options.priorityAssignmentIds.includes(b.assignment.id);
+          if (isPriA !== isPriB) {
+            return isPriA ? -1 : 1;
+          }
+        }
+        const isMultiA = a.assignment.teacherId && parseTeacherIds(a.assignment.teacherId).length > 1;
+        const isMultiB = b.assignment.teacherId && parseTeacherIds(b.assignment.teacherId).length > 1;
+        if (isMultiA !== isMultiB) {
+          return isMultiA ? -1 : 1;
+        }
+        const availSlotsA = classAvailableSlotsCount[a.assignment.classId] ?? 999;
+        const availSlotsB = classAvailableSlotsCount[b.assignment.classId] ?? 999;
+        if (availSlotsA !== availSlotsB) {
+          return availSlotsA - availSlotsB;
+        }
+        const teacherIdsA = parseTeacherIds(a.assignment.teacherId);
+        const teacherIdsB = parseTeacherIds(b.assignment.teacherId);
+        const teacherUnavailA = teacherIdsA.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
+        const teacherUnavailB = teacherIdsB.reduce((sum, id) => sum + (teacherConstraints[id] || 0), 0);
+        if (teacherUnavailA !== teacherUnavailB) {
+          return teacherUnavailB - teacherUnavailA;
+        }
+        if (a.size !== b.size) {
+          return b.size - a.size;
+        }
+        return Math.random() - 0.5;
+      });
+
+      // Swap environment references to the repair ones
+      currentSchedule = repairSchedule;
+      currentTeacherOccupancy = repairTeacherOccupancy;
+      currentClassroomOccupancy = repairClassroomOccupancy;
+
+      // Log progress before repair
+      const isStuck = totalIterations > 300 && (totalIterations - lastImprovementIteration) > 300;
+      const logMessage = isStuck
+        ? "Tıkanma algılandı, otomatik onarım başlatılıyor..."
+        : `LNS Onarım (Repair) aktif: %10 rastgele temizlenip yeniden yerleştiriliyor... (Yeniden Başlatma: ${restartCount})`;
+
+      self.postMessage({
+        type: "progress",
+        progress: {
+          phase: "backtracking",
+          percent: 90,
+          message: logMessage,
+          steps: totalIterations,
+          unplacedCount: bestGlobalUnplacedHours,
+          elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+          totalHours: blocksToPlace.reduce((sum, b) => sum + b.size, 0),
+          placedHours: blocksToPlace.reduce((sum, b) => sum + b.size, 0) - bestGlobalUnplacedHours,
+          unplacedHours: bestGlobalUnplacedHours,
+          bestSchedule: bestGlobalSchedule,
+          unplacedDetails: bestGlobalUnplaced.map(b => `${classesMap.get(b.assignment.classId)?.name || b.assignment.classId} sınıfının ${b.size} saatlik dersi yerleştirilemedi.`)
+        }
+      });
+
+      // Run solveStateSpace on this subproblem
+      return await solveStateSpace(allRepairBlocks, 0);
+    };
+
+    let backtrackingSolved = false;
+    const stagnationIterations = totalIterations - lastImprovementIteration;
+    const isStuck = totalIterations > 300 && stagnationIterations > 300;
+
+    const useStepByStep = options?.stepByStep !== false;
+
+    if (useStepByStep) {
+      lockedAssignmentIds.clear();
+
+      const tier1 = randomizedBlocks.filter(b => getBlockTier(b, coursesMap) === 1);
+      const tier2 = randomizedBlocks.filter(b => getBlockTier(b, coursesMap) === 2);
+      const tier3 = randomizedBlocks.filter(b => getBlockTier(b, coursesMap) === 3);
+
+      let t1Success = true;
+      if (tier1.length > 0) {
+        t1Success = await solveStateSpace(tier1, 0);
+        const val1 = validateSchedule(currentSchedule, numDays, numPeriods);
+        const scheduledT1 = getScheduledAssignmentIds(currentSchedule, numDays, numPeriods);
+        for (const id of scheduledT1) {
+          lockedAssignmentIds.add(id);
+        }
+
+        self.postMessage({
+          type: "progress",
+          progress: {
+            phase: "backtracking",
+            percent: 30,
+            message: `Aşama 1 (Atölye/Laboratuvar) tamamlandı. Doğrulama: ${val1.message}`,
+            steps: totalIterations,
+            unplacedCount: tier1.length - scheduledT1.size,
+            elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+            bestSchedule: currentSchedule
+          }
+        });
+      }
+
+      let t2Success = true;
+      if (tier2.length > 0 && !stopped) {
+        t2Success = await solveStateSpace(tier2, 0);
+        const val2 = validateSchedule(currentSchedule, numDays, numPeriods);
+        const scheduledT2 = getScheduledAssignmentIds(currentSchedule, numDays, numPeriods);
+        for (const id of scheduledT2) {
+          lockedAssignmentIds.add(id);
+        }
+
+        self.postMessage({
+          type: "progress",
+          progress: {
+            phase: "backtracking",
+            percent: 60,
+            message: `Aşama 2 (Sabit/Öğretmen Programı) tamamlandı. Doğrulama: ${val2.message}`,
+            steps: totalIterations,
+            unplacedCount: tier2.length - (scheduledT2.size - lockedAssignmentIds.size),
+            elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+            bestSchedule: currentSchedule
+          }
+        });
+      }
+
+      let t3Success = true;
+      if (tier3.length > 0 && !stopped) {
+        t3Success = await solveStateSpace(tier3, 0);
+        const val3 = validateSchedule(currentSchedule, numDays, numPeriods);
+
+        self.postMessage({
+          type: "progress",
+          progress: {
+            phase: "backtracking",
+            percent: 90,
+            message: `Aşama 3 (Genel Kültür) tamamlandı. Doğrulama: ${val3.message}`,
+            steps: totalIterations,
+            elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+            bestSchedule: currentSchedule
+          }
+        });
+      }
+
+      backtrackingSolved = t1Success && t2Success && t3Success;
+    } else {
+      if (bestGlobalUnplacedHours > 0 && (totalIterations >= 1000 || isStuck)) {
+        if (isStuck && consecutiveLnsRepairsWithoutImprovement >= 3) {
+          consecutiveLnsRepairsWithoutImprovement = 0;
+          backtrackingSolved = await solveStateSpace(randomizedBlocks, 0);
+        } else {
+          consecutiveLnsRepairsWithoutImprovement++;
+          backtrackingSolved = await runLnsRepair();
+        }
+      } else {
+        backtrackingSolved = await solveStateSpace(randomizedBlocks, 0);
+      }
+    }
 
     // Compute unplaced details
     const scheduledHoursInThisTrial: Record<string, number> = {};
@@ -1198,6 +1788,8 @@ self.onmessage = async (e: MessageEvent) => {
       bestGlobalUnplaced = finalUnplacedHoursList;
       bestGlobalUnplacedHours = unplacedHoursThisTrial;
       bestGlobalPenalty = softPenaltyThisTrial;
+      lastImprovementIteration = totalIterations;
+      consecutiveLnsRepairsWithoutImprovement = 0;
 
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       const totalHours = blocksToPlace.reduce((sum, b) => sum + b.size, 0);
@@ -1224,7 +1816,8 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     // 4. Simulated Annealing Optimization Pass
-    if (unplacedHoursThisTrial === 0) {
+    const isTargeted = !!((options?.targetClassIds && options.targetClassIds.length > 0) || (options?.targetTeacherIds && options.targetTeacherIds.length > 0));
+    if (unplacedHoursThisTrial === 0 && !isTargeted) {
       let temp = 100.0;
       const coolingRate = 0.998;
       const maxSAIterations = 2000;
@@ -1326,14 +1919,11 @@ self.onmessage = async (e: MessageEvent) => {
       }
     }
 
-    // Randomized Restart trigger logic (60 seconds)
-    if (Date.now() - lastRestartTime > 60000) {
-      restartCount++;
-      lastRestartTime = Date.now();
-    }
+    // Increments restartCount on every trial to scale backtracking depth/steps dynamically
+    restartCount++;
 
-    // If options specify we only run 1 standard trial and backtracking solved it, let's allow it to complete
-    if (bestGlobalUnplacedHours === 0 && !options?.exhaustiveMode && restartCount > 0) {
+    // If we successfully placed all lessons (0 unplaced hours), break immediately to finish and close the progress overlay!
+    if (bestGlobalUnplacedHours === 0 && !options?.exhaustiveMode) {
       break;
     }
   }

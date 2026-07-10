@@ -27,6 +27,63 @@ export interface ProgressUpdate {
   totalHours?: number;
   placedHours?: number;
   unplacedHours?: number;
+  targetTeacherName?: string;
+  targetClassName?: string;
+}
+
+export function parseTeacherIds(teacherIdStr: string | null | undefined): string[] {
+  if (!teacherIdStr) return [];
+  return teacherIdStr
+    .split(/[\s,;]+/)
+    .map(id => id.trim())
+    .filter(Boolean);
+}
+
+export function isChefOrCoordinatorCourse(courseName: string, courseCode: string): boolean {
+  const nameLower = (courseName || "").toLowerCase().trim();
+  const codeLower = (courseCode || "").toLowerCase().trim();
+
+  // Whitelist exception: if name or code includes felsefe, fel, fls, etc., it is definitely NOT a chef or coordinator course
+  if (
+    nameLower.includes("felsefe") || 
+    nameLower.includes("fel") || 
+    nameLower.includes("fls") ||
+    codeLower.includes("fel") || 
+    codeLower.includes("fls") || 
+    codeLower.includes("felsefe")
+  ) {
+    return false;
+  }
+
+  // Regular expression to check for precise word match of şef, sef, koor, koordinatör, koordinatörlük, şeflik, şefliği
+  const pattern = /(?:^|[^a-zıüşöçğ])(şef|sef|koor|koordinatör|koordinatörlük|şefliği|şeflik)(?:$|[^a-zıüşöçğ])/i;
+  
+  return pattern.test(nameLower) || pattern.test(codeLower);
+}
+
+export function isGeneralCultureCourse(courseName: string, courseCode: string): boolean {
+  const nameLower = (courseName || "").toLowerCase().trim();
+  const codeLower = (courseCode || "").toLowerCase().trim();
+
+  // If it's chef or coordinator duty, it's NOT a general culture course (it's teacher duty/coordination)
+  if (isChefOrCoordinatorCourse(courseName, courseCode)) {
+    return false;
+  }
+
+  const keywords = [
+    "matematik", "geometri", "fizik", "kimya", "biyoloji", "tarih", "coğrafya", "edebiyat", 
+    "türk dili", "ingilizce", "almanca", "yabancı dil", "din kültürü", "felsefe", "müzik", 
+    "resim", "görsel sanatlar", "beden eğitimi", "sağlık bilgisi", "rehberlik", "fel", "türkçe",
+    "coğ", "tar", "mat", "fiz", "kim", "biyo", "ing", "alm", "dkab", "din", "görsel", "müz", "bed"
+  ];
+
+  return keywords.some(kw => nameLower.includes(kw) || codeLower.includes(kw));
+}
+
+export function getDefaultMaxDepth(teacherCount: number): number {
+  if (teacherCount < 20) return 8;
+  if (teacherCount < 50) return 15;
+  return 25;
 }
 
 /**
@@ -80,7 +137,7 @@ export function detectConflicts(state: AppState): ConflictInfo[] {
         }
 
         if (slot.teacherId) {
-          const teacherIds = slot.teacherId.split(",");
+          const teacherIds = parseTeacherIds(slot.teacherId);
           for (const tId of teacherIds) {
             const teacher = teacherMap.get(tId);
             if (teacher?.unavailability[d]?.[p]) {
@@ -106,7 +163,7 @@ export function detectConflicts(state: AppState): ConflictInfo[] {
         }
 
         if (slot.teacherId) {
-          const teacherIds = slot.teacherId.split(",");
+          const teacherIds = parseTeacherIds(slot.teacherId);
           for (const tId of teacherIds) {
             const teacherKey = `${tId}-${d}-${p}`;
             if (teacherOccupancy[teacherKey]) {
@@ -170,7 +227,7 @@ export function getTeacherGapsForDay(
   dayIndex: number,
   numPeriods: number
 ): number {
-  const teacherIds = teacherId.split(",");
+  const teacherIds = parseTeacherIds(teacherId);
   let maxGaps = 0;
   
   for (const tId of teacherIds) {
@@ -183,7 +240,7 @@ export function getTeacherGapsForDay(
       for (let p = 0; p < numPeriods; p++) {
         const slot = daySlots[p];
         if (slot && slot.teacherId) {
-          const slotTIds = slot.teacherId.split(",");
+          const slotTIds = parseTeacherIds(slot.teacherId);
           if (slotTIds.includes(tId)) {
             activePeriods.add(p);
           }
@@ -277,7 +334,7 @@ export function isPlacementValidEx(
     if (classItem?.unavailability[dayIndex]?.[p]) return false;
 
     if (assignment.teacherId) {
-      const teacherIds = assignment.teacherId.split(",");
+      const teacherIds = parseTeacherIds(assignment.teacherId);
       for (const tId of teacherIds) {
         const teacher = teachers.find(t => t.id === tId);
         if (teacher?.unavailability[dayIndex]?.[p]) return false;
@@ -295,7 +352,7 @@ export function isPlacementValidEx(
     }
 
     if (assignment.teacherId) {
-      const teacherIds = assignment.teacherId.split(",");
+      const teacherIds = parseTeacherIds(assignment.teacherId);
       for (const tId of teacherIds) {
         for (const cId of Object.keys(tempSchedule)) {
           if (classIdToIgnoreTeacherCheck && cId === classIdToIgnoreTeacherCheck) {
@@ -305,7 +362,7 @@ export function isPlacementValidEx(
           if (!classSched) continue;
           const slot = classSched[dayIndex]?.[p];
           if (slot && slot.teacherId) {
-            const existingTeacherIds = slot.teacherId.split(",");
+            const existingTeacherIds = parseTeacherIds(slot.teacherId);
             if (existingTeacherIds.includes(tId)) {
               return false;
             }
@@ -403,7 +460,7 @@ export function calculateScheduleScore(
         classCourseDayPeriods[classId][slot.courseId][d].push(p);
 
         if (slot.teacherId) {
-          const tIds = slot.teacherId.split(",");
+          const tIds = parseTeacherIds(slot.teacherId);
           tIds.forEach(tId => {
             if (teacherDayPeriods[tId]) {
               teacherDayPeriods[tId][d].add(p);
@@ -571,7 +628,7 @@ export function diagnoseUnplacedAssignment(
   const { teachers, classes, classrooms, courses, settings } = state;
   const classObj = classes.find(c => c.id === assignment.classId);
   const courseObj = courses.find(c => c.id === assignment.courseId);
-  const tIds = assignment.teacherId ? assignment.teacherId.split(",") : [];
+  const tIds = parseTeacherIds(assignment.teacherId);
   const teacherNames = tIds.map(id => teachers.find(t => t.id === id)?.name).filter(Boolean).join(", ");
   
   let reason = `"${classObj?.name || 'Sınıf'}" sınıfı ile "${teacherNames || 'Öğretmen'}" kısıtları çakışıyor.`;
@@ -597,7 +654,7 @@ export function diagnoseUnplacedAssignment(
       
       let assignedHours = 0;
       state.assignments.forEach(as => {
-        if (as.teacherId && as.teacherId.split(",").includes(tId)) {
+        if (as.teacherId && parseTeacherIds(as.teacherId).includes(tId)) {
           assignedHours += as.weeklyHours;
         }
       });
@@ -703,7 +760,7 @@ export function stopActiveScheduler() {
  * Completely asynchronous scheduling solver combining Multi-Start Randomized CSP Backtracking
  * followed by Simulated Annealing local search. Never violates hard constraints.
  */
-export async function generateAutomaticScheduleAsync(
+export async function generateStepByStepScheduleAsync(
   state: AppState,
   onProgress?: (progress: ProgressUpdate) => void,
   options?: {
@@ -713,6 +770,8 @@ export async function generateAutomaticScheduleAsync(
     priorityAssignmentIds?: string[];
     numTrials?: number;
     deepSearch?: boolean;
+    maxDepth?: number;
+    stepByStep?: boolean;
   }
 ): Promise<{
   success: boolean;
@@ -774,7 +833,7 @@ export async function generateAutomaticScheduleAsync(
               // If targetTeacherIds is specified, only include assignments for those teachers
               if (targetTeacherIds && targetTeacherIds.length > 0) {
                 if (!assign.teacherId) continue;
-                const assignTeacherIds = assign.teacherId.split(",");
+                const assignTeacherIds = parseTeacherIds(assign.teacherId);
                 const hasTargetTeacher = assignTeacherIds.some(id => targetTeacherIds.includes(id));
                 if (!hasTargetTeacher) continue;
               }
@@ -790,7 +849,7 @@ export async function generateAutomaticScheduleAsync(
                 const diagnosis = diagnoseUnplacedAssignment(state, result.schedule, assign, remaining);
                 unplacedDiagnosis.push(`❌ ${classes.find(c => c.id === assign.classId)?.name || 'Sınıf'} sınıfındaki "${state.courses.find(co => co.id === assign.courseId)?.name || 'Ders'}" dersi yerleştirilemedi. Neden: ${diagnosis.reason}`);
                 const teacherNames = assign.teacherId
-                  ? assign.teacherId.split(",").map(id => teachers.find(t => t.id === id)?.name || id).join(", ")
+                  ? parseTeacherIds(assign.teacherId).map(id => teachers.find(t => t.id === id)?.name || id).join(", ")
                   : "Öğretmensiz";
 
                 unplacedReports.push({
@@ -851,6 +910,8 @@ export async function generateAutomaticScheduleAsync(
     }
   });
 }
+
+export const generateAutomaticScheduleAsync = generateStepByStepScheduleAsync;
 
 /**
  * Synchronous wrapper for automated timetabling solver, running a rapid pass of the engine.
@@ -984,7 +1045,7 @@ export function generatePartialSchedule(
   const targetsFilter = assignments.filter((assign) => {
     if (options.targetClassIds && options.targetClassIds.includes(assign.classId)) return true;
     if (options.targetTeacherIds && assign.teacherId) {
-      const ids = assign.teacherId.split(",");
+      const ids = parseTeacherIds(assign.teacherId);
       if (ids.some(id => options.targetTeacherIds!.includes(id))) return true;
     }
     return false;

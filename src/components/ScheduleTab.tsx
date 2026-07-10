@@ -23,7 +23,7 @@ import {
   Award,
   Briefcase
 } from "lucide-react";
-import { detectConflicts, generateAutomaticScheduleAsync } from "../utils/scheduler";
+import { detectConflicts, generateAutomaticScheduleAsync, parseTeacherIds, getDefaultMaxDepth, isChefOrCoordinatorCourse } from "../utils/scheduler";
 import {
   Home,
   Settings,
@@ -44,6 +44,7 @@ interface ScheduleTabProps {
   optimizeGapsForTeacher: (teacherId: string) => void;
   optimizeGapsForAllTeachers: () => void;
   removeSingleLessonDays: () => void;
+  removeSingleLessonDaysForTeacher: (teacherId: string) => void;
   handleClearSchedule: () => void;
   handleClearAllTeachersSchedule: () => void;
   handleClearTeacherLessons: (tId: string) => void;
@@ -56,6 +57,7 @@ export default function ScheduleTab({
   optimizeGapsForTeacher,
   optimizeGapsForAllTeachers,
   removeSingleLessonDays,
+  removeSingleLessonDaysForTeacher,
   handleClearSchedule,
   handleClearAllTeachersSchedule,
   handleClearTeacherLessons
@@ -100,12 +102,14 @@ export default function ScheduleTab({
     setEditingCell({ dayIndex, periodIndex, classId });
   };
 
-  const handleUpdateSchoolSettings = (key: "groupLessonsMode" | "maxTeacherDailyGaps", value: any) => {
+  const handleUpdateSchoolSettings = (key: "groupLessonsMode" | "maxTeacherDailyGaps" | "maxDepth", value: any) => {
     updateState((draft) => {
       if (key === "groupLessonsMode") {
         draft.settings.groupLessonsMode = value;
       } else if (key === "maxTeacherDailyGaps") {
         draft.settings.maxTeacherDailyGaps = value;
+      } else if (key === "maxDepth") {
+        draft.settings.maxDepth = value;
       }
     });
   };
@@ -132,7 +136,7 @@ export default function ScheduleTab({
     }
 
     // 2. Unavailability locks
-    const tIds = slotToMove.teacherId ? slotToMove.teacherId.split(",") : [];
+    const tIds = parseTeacherIds(slotToMove.teacherId);
     for (const tId of tIds) {
       const teacherObj = teachersMap.get(tId);
       if (teacherObj && teacherObj.unavailability?.[toDay]?.[toPeriod]) {
@@ -157,7 +161,7 @@ export default function ScheduleTab({
         if (otherClassId === toClassId) continue;
         const otherSlot = state.schedule[otherClassId]?.[toDay]?.[toPeriod];
         if (otherSlot && otherSlot.teacherId) {
-          const otherTIds = otherSlot.teacherId.split(",");
+          const otherTIds = parseTeacherIds(otherSlot.teacherId);
           if (otherTIds.includes(tId)) {
             if (toClassId === otherClassId && toDay === ignoreFromDay && toPeriod === ignoreFromPeriod) continue;
             const tName = teachersMap.get(tId)?.name || "Öğretmen";
@@ -186,6 +190,7 @@ export default function ScheduleTab({
   const assignmentsMap = new Map<string, LessonAssignment>(state.assignments.map((as) => [as.id, as]));
 
   // Local context and dialog states (extracted from App.tsx to localize state and lighten App.tsx)
+  const [kbdFocusArea, setKbdFocusArea] = useState<'entities' | 'assignments'>('entities');
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -589,6 +594,9 @@ const handleCellDoubleClick = (dIdx: number, pIdx: number) => {
         } else if (scheduleViewMode === "teacher" && viewingEntityId) {
           const teachAss = state.assignments.filter(a => a.teacherId && a.teacherId.split(",").includes(viewingEntityId));
           return teachAss.find(a => getAssignmentPlacedHours(a.id) < a.weeklyHours) || teachAss[0];
+        } else if (scheduleViewMode === "classroom" && viewingEntityId) {
+          const roomAss = state.assignments.filter(a => a.classroomId === viewingEntityId);
+          return roomAss.find(a => getAssignmentPlacedHours(a.id) < a.weeklyHours) || roomAss[0];
         }
         return undefined;
       })();
@@ -636,152 +644,53 @@ const handleCellDoubleClick = (dIdx: number, pIdx: number) => {
           }
         }
 
-        // Check if teacher is busy elsewhere
+        // 1. Class conflict (if class already has a lesson at dIdx, pIdx)
+        const targetClassId = currentActiveAssignment.classId;
+        const existingClassSlot = state.schedule[targetClassId]?.[dIdx]?.[pIdx];
+        if (existingClassSlot) {
+          const courseName = coursesMap.get(existingClassSlot.courseId)?.name || "Ders";
+          showToast(`Çakışma: Sınıfın bu saatte zaten bir dersi var (${courseName}). Çakışma nedeniyle yeni ders yerleştirilemedi!`, "error");
+          return;
+        }
+
+        // 2. Teacher conflict (if any of the teachers are busy in another class at dIdx, pIdx)
         for (const tId of tIds) {
           for (const otherClassId of Object.keys(state.schedule)) {
-            if (otherClassId === currentActiveAssignment.classId) continue;
+            if (otherClassId === targetClassId) continue;
             const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
             if (otherSlot && otherSlot.teacherId) {
               const otherTIds = otherSlot.teacherId.split(",");
               if (otherTIds.includes(tId)) {
                 const tName = teachersMap.get(tId)?.name || "Öğretmen";
                 const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
-                showToast(`Çakışma: ${tName} bu saatte ${otherClassName} sınıfında derste!`, "error");
+                const otherCourseName = coursesMap.get(otherSlot.courseId)?.name || "Ders";
+                showToast(`Çakışma: ${tName} öğretmeni bu saatte ${otherClassName} sınıfında derste (${otherCourseName})! Yeni ders yerleştirilemedi.`, "error");
                 return;
               }
             }
           }
         }
 
-        // Check if class is busy elsewhere (relevant if view mode is not class)
-        if (scheduleViewMode !== "class") {
-          const classSlot = state.schedule[currentActiveAssignment.classId]?.[dIdx]?.[pIdx];
-          if (classSlot && classSlot.assignmentId !== currentActiveAssignment.id) {
-            showToast("Çakışma: Sınıfın bu saatte başka bir dersi var!", "error");
-            return;
+        // Perform state updates since no conflicts were found
+        updateState((draft) => {
+          // Place the new one
+          if (!draft.schedule[targetClassId]) {
+            draft.schedule[targetClassId] = {};
           }
-        }
-
-        // Check if classroom is occupied elsewhere (Allowed to overlap per user request: "Atölyeler paylaşılabilir")
-        /*
-        if (currentActiveAssignment.classroomId) {
-          for (const otherClassId of Object.keys(state.schedule)) {
-            if (otherClassId === currentActiveAssignment.classId) continue;
-            const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
-            if (otherSlot && otherSlot.classroomId === currentActiveAssignment.classroomId) {
-              const rName = classroomsMap.get(currentActiveAssignment.classroomId)?.name || "Atölye";
-              const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
-              showToast(`Çakışma: ${rName} bu saatte ${otherClassName} tarafından kullanılıyor!`, "error");
-              return;
-            }
+          if (!draft.schedule[targetClassId][dIdx]) {
+            draft.schedule[targetClassId][dIdx] = Array(draft.settings.periodsPerDay).fill(null);
           }
-        }
-        */
-      }
+          draft.schedule[targetClassId][dIdx][pIdx] = {
+            assignmentId: currentActiveAssignment.id,
+            courseId: currentActiveAssignment.courseId,
+            teacherId: currentActiveAssignment.teacherId,
+            classroomId: currentActiveAssignment.classroomId
+          };
+        });
 
-      if (scheduleViewMode === "class" && viewingEntityId) {
-        let targetAssign = state.assignments.find(
-          (a) => a.id === selectedAssignmentId && a.classId === viewingEntityId
-        );
-        if (!targetAssign) {
-          const classAssignments = state.assignments.filter(
-            (a) => a.classId === viewingEntityId
-          );
-          targetAssign = classAssignments.find((a) => {
-            const placed = getAssignmentPlacedHours(a.id);
-            return placed < a.weeklyHours;
-          }) || classAssignments[0];
-        }
-
-        if (targetAssign) {
-          updateState((draft) => {
-            if (!draft.schedule[viewingEntityId]) {
-              draft.schedule[viewingEntityId] = {};
-            }
-            if (!draft.schedule[viewingEntityId][dIdx]) {
-              draft.schedule[viewingEntityId][dIdx] = Array(draft.settings.periodsPerDay).fill(null);
-            }
-            draft.schedule[viewingEntityId][dIdx][pIdx] = {
-              assignmentId: targetAssign.id,
-              courseId: targetAssign.courseId,
-              teacherId: targetAssign.teacherId,
-              classroomId: targetAssign.classroomId
-            };
-          });
-          showToast(`${coursesMap.get(targetAssign.courseId)?.name || "Ders"} başarıyla yerleştirildi.`, "success");
-        } else {
-          showToast("Sınıfa ait ders dağıtımı bulunamadı.", "error");
-        }
-      } 
-      else if (scheduleViewMode === "teacher" && viewingEntityId) {
-        let targetAssign = state.assignments.find(
-          (a) => a.id === selectedAssignmentId && a.teacherId && a.teacherId.split(",").includes(viewingEntityId)
-        );
-        if (!targetAssign) {
-          const teacherAssignments = state.assignments.filter(
-            (a) => a.teacherId && a.teacherId.split(",").includes(viewingEntityId)
-          );
-          targetAssign = teacherAssignments.find((a) => {
-            const placed = getAssignmentPlacedHours(a.id);
-            return placed < a.weeklyHours;
-          }) || teacherAssignments[0];
-        }
-
-        if (targetAssign) {
-          const targetClassId = targetAssign.classId;
-          updateState((draft) => {
-            if (!draft.schedule[targetClassId]) {
-              draft.schedule[targetClassId] = {};
-            }
-            if (!draft.schedule[targetClassId][dIdx]) {
-              draft.schedule[targetClassId][dIdx] = Array(draft.settings.periodsPerDay).fill(null);
-            }
-            draft.schedule[targetClassId][dIdx][pIdx] = {
-              assignmentId: targetAssign.id,
-              courseId: targetAssign.courseId,
-              teacherId: targetAssign.teacherId,
-              classroomId: targetAssign.classroomId
-            };
-          });
-          showToast(`${coursesMap.get(targetAssign.courseId)?.name || "Ders"} başarıyla yerleştirildi (${classesMap.get(targetClassId)?.name}).`, "success");
-        } else {
-          showToast("Öğretmene ait ders dağıtımı bulunamadı.", "error");
-        }
-      } 
-      else if (scheduleViewMode === "classroom" && viewingEntityId) {
-        let targetAssign = state.assignments.find(
-          (a) => a.id === selectedAssignmentId && a.classroomId === viewingEntityId
-        );
-        if (!targetAssign) {
-          const roomAssignments = state.assignments.filter(
-            (a) => a.classroomId === viewingEntityId
-          );
-          targetAssign = roomAssignments.find((a) => {
-            const placed = getAssignmentPlacedHours(a.id);
-            return placed < a.weeklyHours;
-          }) || roomAssignments[0];
-        }
-
-        if (targetAssign) {
-          const targetClassId = targetAssign.classId;
-          updateState((draft) => {
-            if (!draft.schedule[targetClassId]) {
-              draft.schedule[targetClassId] = {};
-            }
-            if (!draft.schedule[targetClassId][dIdx]) {
-              draft.schedule[targetClassId][dIdx] = Array(draft.settings.periodsPerDay).fill(null);
-            }
-            draft.schedule[targetClassId][dIdx][pIdx] = {
-              assignmentId: targetAssign.id,
-              courseId: targetAssign.courseId,
-              teacherId: targetAssign.teacherId,
-              classroomId: targetAssign.classroomId
-            };
-          });
-          showToast(`${coursesMap.get(targetAssign.courseId)?.name || "Ders"} başarıyla yerleştirildi (${classesMap.get(targetClassId)?.name}).`, "success");
-        } else {
-          showToast("Atölyeye ait ders dağıtımı bulunamadı.", "error");
-        }
+        showToast(`"${coursesMap.get(currentActiveAssignment.courseId)?.name || "Ders"}" başarıyla yerleştirildi.`, "success");
+      } else {
+        showToast("Seçili veya atanabilir ders dağıtımı bulunamadı.", "error");
       }
     }
   }
@@ -860,7 +769,7 @@ const handleDrop = (e: React.DragEvent, toDay: number, toPeriod: number, toClass
         }
 
         // Check unavailability of teachers
-        const tIds = assign.teacherId ? assign.teacherId.split(",") : [];
+        const tIds = parseTeacherIds(assign.teacherId);
         for (const tId of tIds) {
           const teacherObj = teachersMap.get(tId);
           if (teacherObj && teacherObj.unavailability?.[toDay]?.[toPeriod]) {
@@ -884,48 +793,35 @@ const handleDrop = (e: React.DragEvent, toDay: number, toPeriod: number, toClass
           }
         }
 
-        // Check if teacher is busy elsewhere
+        // 1. Class conflict (if class already has a lesson at toDay, toPeriod)
+        const existingClassSlot = state.schedule[targetClassId]?.[toDay]?.[toPeriod];
+        if (existingClassSlot) {
+          const courseName = coursesMap.get(existingClassSlot.courseId)?.name || "Ders";
+          showToast(`Çakışma: Sınıfın bu saatte zaten bir dersi var (${courseName}). Çakışma nedeniyle yeni ders yerleştirilemedi!`, "error");
+          return;
+        }
+
+        // 2. Teacher conflict (if any of the teachers are busy in another class at toDay, toPeriod)
         for (const tId of tIds) {
           for (const otherClassId of Object.keys(state.schedule)) {
             if (otherClassId === targetClassId) continue;
             const otherSlot = state.schedule[otherClassId]?.[toDay]?.[toPeriod];
             if (otherSlot && otherSlot.teacherId) {
-              const otherTIds = otherSlot.teacherId.split(",");
+              const otherTIds = parseTeacherIds(otherSlot.teacherId);
               if (otherTIds.includes(tId)) {
                 const tName = teachersMap.get(tId)?.name || "Öğretmen";
                 const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
-                showToast(`Çakışma: ${tName} bu saatte ${otherClassName} sınıfında derste!`, "error");
+                const otherCourseName = coursesMap.get(otherSlot.courseId)?.name || "Ders";
+                showToast(`Çakışma: ${tName} öğretmeni bu saatte ${otherClassName} sınıfında derste (${otherCourseName})! Yeni ders yerleştirilemedi.`, "error");
                 return;
               }
             }
           }
         }
 
-        // Check if classroom is occupied elsewhere (Allowed to overlap per user request: "Atölyeler paylaşılabilir")
-        /*
-        if (assign.classroomId) {
-          for (const otherClassId of Object.keys(state.schedule)) {
-            if (otherClassId === targetClassId) continue;
-            const otherSlot = state.schedule[otherClassId]?.[toDay]?.[toPeriod];
-            if (otherSlot && otherSlot.classroomId === assign.classroomId) {
-              const rName = classroomsMap.get(assign.classroomId)?.name || "Atölye";
-              const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
-              showToast(`Çakışma: ${rName} bu saatte ${otherClassName} tarafından kullanılıyor!`, "error");
-              return;
-            }
-          }
-        }
-        */
-
-        // Check if there's already a slot in the target cell and if it's locked
-        const existingSlot = state.schedule[targetClassId]?.[toDay]?.[toPeriod];
-        if (existingSlot && existingSlot.isLocked) {
-          showToast("Kilitli bir dersin üzerine yerleşim yapamazsınız!", "error");
-          return;
-        }
-
-        // Update state to place the dragged assignment
+        // Perform state updates since no conflicts were found
         updateState((draft) => {
+          // Place the new one
           if (!draft.schedule[targetClassId]) {
             draft.schedule[targetClassId] = {};
           }
@@ -1036,7 +932,7 @@ const handleApplyManualCellAssignment = (assignmentId: string | "clear") => {
 
     // 2. Check unavailability locks
     // a) Teacher unavailability
-    const tIds = assign.teacherId ? assign.teacherId.split(",") : [];
+    const tIds = parseTeacherIds(assign.teacherId);
     for (const tId of tIds) {
       const teacherObj = teachersMap.get(tId);
       if (teacherObj && teacherObj.unavailability?.[dayIndex]?.[periodIndex]) {
@@ -1067,7 +963,7 @@ const handleApplyManualCellAssignment = (assignmentId: string | "clear") => {
         if (otherClassId === classId) continue;
         const otherSlot = state.schedule[otherClassId]?.[dayIndex]?.[periodIndex];
         if (otherSlot && otherSlot.teacherId) {
-          const otherTIds = otherSlot.teacherId.split(",");
+          const otherTIds = parseTeacherIds(otherSlot.teacherId);
           if (otherTIds.includes(tId)) {
             const tName = teachersMap.get(tId)?.name || "Öğretmen";
             const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
@@ -1097,6 +993,11 @@ const handleApplyManualCellAssignment = (assignmentId: string | "clear") => {
     // 4. Weekly hours limit check
     const placed = getAssignmentPlacedHours(assign.id);
     const currentSlot = state.schedule[classId]?.[dayIndex]?.[periodIndex];
+    if (currentSlot && currentSlot.assignmentId !== assign.id) {
+      const courseName = coursesMap.get(currentSlot.courseId)?.name || "Ders";
+      showToast(`Çakışma: Sınıfın bu saatte zaten bir dersi var (${courseName}). Çakışma nedeniyle yeni ders yerleştirilemedi!`, "error");
+      return;
+    }
     const isSameAssignment = currentSlot && currentSlot.assignmentId === assign.id;
     if (!isSameAssignment && placed >= assign.weeklyHours) {
       showToast(`Haftalık ders saati sınırı (${assign.weeklyHours} saat) zaten dolmuş!`, "error");
@@ -1481,13 +1382,15 @@ const handleNavigateToTeacherFromCell = (dIdx: number, pIdx: number) => {
     }
 
     const courseName = coursesMap.get(assign.courseId)?.name || "Ders";
+    const targetTeacherName = tIds.map(id => state.teachers.find(t => t.id === id)?.name).filter(Boolean).join(", ");
     showToast(`"${courseName}" dersi zorlanarak tüm saatleri yerleştirilmeye çalışılıyor...`, "info");
     setIsScheduling(true);
     setSchedulingProgress({
       phase: "backtracking",
       percent: 15,
       message: `Öğretmenin dersleri temizlendi, yeniden çözülüyor...`,
-      steps: 0
+      steps: 0,
+      targetTeacherName
     });
 
     try {
@@ -1502,7 +1405,8 @@ const handleNavigateToTeacherFromCell = (dIdx: number, pIdx: number) => {
           phase: prog.phase,
           percent: Math.min(95, Math.round(15 + prog.percent * 0.8)),
           message: `Ders yerleştiriliyor: ${prog.message}`,
-          steps: prog.steps
+          steps: prog.steps,
+          targetTeacherName
         });
       }, {
         keepExisting: true,
@@ -1714,61 +1618,88 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
           }
         }
       } else {
-        // If no schedule cell is focused, handle ArrowUp / ArrowDown to navigate lists
+        // If no schedule cell is focused, handle ArrowUp / ArrowDown to navigate lists based on kbdFocusArea
         if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
-          if (scheduleViewMode === "teacher") {
-            const filtered = state.teachers.filter(t =>
-              t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (t.branch && t.branch.toLowerCase().includes(searchQuery.toLowerCase()))
-            );
-            if (filtered.length > 0) {
-              const currentIdx = filtered.findIndex(t => t.id === viewingEntityId);
-              let nextIdx = 0;
-              if (currentIdx !== -1) {
-                if (e.key === "ArrowUp") {
-                  nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
-                } else {
-                  nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
+          if (kbdFocusArea === "entities") {
+            if (scheduleViewMode === "teacher") {
+              const filtered = state.teachers.filter(t =>
+                t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (t.branch && t.branch.toLowerCase().includes(searchQuery.toLowerCase()))
+              );
+              if (filtered.length > 0) {
+                const currentIdx = filtered.findIndex(t => t.id === viewingEntityId);
+                let nextIdx = 0;
+                if (currentIdx !== -1) {
+                  if (e.key === "ArrowUp") {
+                    nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
+                  } else {
+                    nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
+                  }
                 }
+                const nextEntity = filtered[nextIdx];
+                if (nextEntity) setViewingEntityId(nextEntity.id);
               }
-              const nextEntity = filtered[nextIdx];
-              if (nextEntity) setViewingEntityId(nextEntity.id);
+            } else if (scheduleViewMode === "class") {
+              const filtered = state.classes.filter(c =>
+                c.name.toLowerCase().includes(searchQuery.toLowerCase())
+              );
+              if (filtered.length > 0) {
+                const currentIdx = filtered.findIndex(c => c.id === viewingEntityId);
+                let nextIdx = 0;
+                if (currentIdx !== -1) {
+                  if (e.key === "ArrowUp") {
+                    nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
+                  } else {
+                    nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
+                  }
+                }
+                const nextEntity = filtered[nextIdx];
+                if (nextEntity) setViewingEntityId(nextEntity.id);
+              }
+            } else if (scheduleViewMode === "classroom") {
+              const filtered = state.classrooms.filter(cr =>
+                cr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (cr.type && cr.type.toLowerCase().includes(searchQuery.toLowerCase()))
+              );
+              if (filtered.length > 0) {
+                const currentIdx = filtered.findIndex(cr => cr.id === viewingEntityId);
+                let nextIdx = 0;
+                if (currentIdx !== -1) {
+                  if (e.key === "ArrowUp") {
+                    nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
+                  } else {
+                    nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
+                  }
+                }
+                const nextEntity = filtered[nextIdx];
+                if (nextEntity) setViewingEntityId(nextEntity.id);
+              }
             }
-          } else if (scheduleViewMode === "class") {
-            const filtered = state.classes.filter(c =>
-              c.name.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-            if (filtered.length > 0) {
-              const currentIdx = filtered.findIndex(c => c.id === viewingEntityId);
-              let nextIdx = 0;
-              if (currentIdx !== -1) {
-                if (e.key === "ArrowUp") {
-                  nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
-                } else {
-                  nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
-                }
-              }
-              const nextEntity = filtered[nextIdx];
-              if (nextEntity) setViewingEntityId(nextEntity.id);
+          } else if (kbdFocusArea === "assignments") {
+            let activeAssigns: LessonAssignment[] = [];
+            if (scheduleViewMode === "teacher") {
+              activeAssigns = state.assignments.filter(a => a.teacherId && a.teacherId.split(",").includes(viewingEntityId));
+            } else if (scheduleViewMode === "class") {
+              activeAssigns = state.assignments.filter(a => a.classId === viewingEntityId);
+            } else if (scheduleViewMode === "classroom") {
+              activeAssigns = state.assignments.filter(a => a.classroomId === viewingEntityId);
             }
-          } else if (scheduleViewMode === "classroom") {
-            const filtered = state.classrooms.filter(cr =>
-              cr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (cr.type && cr.type.toLowerCase().includes(searchQuery.toLowerCase()))
-            );
-            if (filtered.length > 0) {
-              const currentIdx = filtered.findIndex(cr => cr.id === viewingEntityId);
+
+            if (activeAssigns.length > 0) {
+              const currentIdx = activeAssigns.findIndex(a => a.id === selectedAssignmentId);
               let nextIdx = 0;
               if (currentIdx !== -1) {
                 if (e.key === "ArrowUp") {
-                  nextIdx = currentIdx === 0 ? filtered.length - 1 : currentIdx - 1;
+                  nextIdx = currentIdx === 0 ? activeAssigns.length - 1 : currentIdx - 1;
                 } else {
-                  nextIdx = currentIdx === filtered.length - 1 ? 0 : currentIdx + 1;
+                  nextIdx = currentIdx === activeAssigns.length - 1 ? 0 : currentIdx + 1;
                 }
+              } else {
+                nextIdx = e.key === "ArrowUp" ? activeAssigns.length - 1 : 0;
               }
-              const nextEntity = filtered[nextIdx];
-              if (nextEntity) setViewingEntityId(nextEntity.id);
+              const nextAssign = activeAssigns[nextIdx];
+              if (nextAssign) setSelectedAssignmentId(nextAssign.id);
             }
           }
         }
@@ -1779,7 +1710,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  }, [focusedCell, scheduleViewMode, viewingEntityId, state, searchQuery, f3ClosureName, teacherStatusDialog, toggleCellUnavailabilityAt, handleSetCustomClosureAt, setViewingEntityId]);
+  }, [focusedCell, scheduleViewMode, viewingEntityId, state, searchQuery, f3ClosureName, teacherStatusDialog, toggleCellUnavailabilityAt, handleSetCustomClosureAt, setViewingEntityId, kbdFocusArea, selectedAssignmentId, setSelectedAssignmentId]);
 
   // Return the main schedule view logic
   const totalAssignedHours = state.assignments.reduce((sum, a) => sum + a.weeklyHours, 0);
@@ -1822,9 +1753,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                 // 2. Check unavailability locks
                 // a) Teacher unavailability
-                const tIds = currentActiveAssignment.teacherId 
-                  ? currentActiveAssignment.teacherId.split(",").map(id => id.trim()).filter(Boolean) 
-                  : [];
+                const tIds = parseTeacherIds(currentActiveAssignment.teacherId);
                 for (const tId of tIds) {
                   const teacherObj = teachersMap.get(tId);
                   if (teacherObj && teacherObj.unavailability?.[dIdx]?.[pIdx]) {
@@ -1852,7 +1781,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                     if (otherClassId === currentActiveAssignment.classId) continue;
                     const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
                     if (otherSlot && otherSlot.teacherId) {
-                      const otherTIds = otherSlot.teacherId.split(",").map(id => id.trim()).filter(Boolean);
+                      const otherTIds = parseTeacherIds(otherSlot.teacherId);
                       if (otherTIds.includes(tId)) {
                         const tName = teachersMap.get(tId)?.name || "Öğretmen";
                         const otherClassName = classesMap.get(otherClassId)?.name || "başka sınıf";
@@ -1920,13 +1849,13 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
         className="flex flex-col flex-1 text-slate-800"
       >
                   {/* 2. Alt Gövde: Dikey akışlı tam genişlikte yerleşim */}
-                  <div className="flex flex-col gap-4 pb-1">
+                  <div className="flex flex-col gap-2.5 pb-1">
                   
                   {/* PROGRAM TABLOSU (Tam Genişlikte, Sağında ve Solunda Yer Kaplanmaz) */}
-                  <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+                  <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
                     
                     {/* Header: Title & Görünüm Sekmeleri (Above the table) */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 mb-2 shrink-0 gap-3">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between pb-0 mb-0 shrink-0 gap-2 border-b-0">
                       <div className="flex items-center space-x-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -1944,11 +1873,11 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                       </div>
 
                       {/* GÖRÜNÜM SEKMELERİ (Sekmeler Programın Üstünde - Daha Büyük Yapıldı) */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest hidden sm:inline">
+                      <div className="flex items-center gap-3 shrink-0 m-0">
+                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest hidden sm:inline m-0">
                           GÖRÜNÜM SEKMELERİ:
                         </span>
-                        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+                        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner m-0">
                           <button
                             onClick={() => {
                               setScheduleViewMode("teacher");
@@ -2105,17 +2034,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                   if (!slot) return false;
                                   const course = coursesMap.get(slot.courseId);
                                   if (!course) return false;
-                                  const nameLower = (course.name || "").toLowerCase();
-                                  const codeLower = (course.code || "").toLowerCase();
-                                  return (
-                                    nameLower.includes("şef") || 
-                                    nameLower.includes("sef") || 
-                                    nameLower.includes("koor") || 
-                                    nameLower.includes("koordinatör") ||
-                                    codeLower.includes("şef") ||
-                                    codeLower.includes("sef") ||
-                                    codeLower.includes("koor")
-                                  );
+                                  return isChefOrCoordinatorCourse(course.name, course.code);
                                 })();
 
                                 // Determine active status and color coding
@@ -2328,7 +2247,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                             handleDrop(e, dIdx, pIdx, activeClassId);
                                           }
                                         }}
-                                        className={`w-full h-[56px] m-0 p-0 flex flex-col justify-center items-center text-center relative shrink-0 rounded-none leading-none transition-all duration-100 select-none focus:outline-none focus:ring-2 focus:ring-blue-600 focus:z-10 hover:brightness-95 hover:scale-[1.01] ${
+                                        className={`w-full h-[50px] m-0 p-0 flex flex-col justify-center items-center text-center relative shrink-0 rounded-none leading-none transition-all duration-100 select-none focus:outline-none focus:ring-2 focus:ring-blue-600 focus:z-10 hover:brightness-95 hover:scale-[1.01] ${
                                           viewingEntityId && !cellIsImpossiblePeriod ? "cursor-pointer" : "cursor-default"
                                         } ${cellStyle}`}
                                       >
@@ -2511,46 +2430,8 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                       </table>
                     </div>
 
-                    {/* Real-time Conflict & Error Warning Panel + Doluluk İstatistiği (Merged & Elegant!) */}
-                    <div className="mt-2 pt-1 border-t border-slate-100 shrink-0">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-1.5 rounded-lg border shadow-sm text-[10px] bg-slate-50/60 border-slate-200/60">
-                        {/* Sol Kısım: Çakışma Durumu */}
-                        <div className="flex items-center space-x-1.5">
-                          {activeConflicts.length === 0 ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                              <span className="font-bold text-emerald-800">Mükemmel! Mevcut ders programında hiçbir çakışma bulunmamaktadır.</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0 animate-pulse" />
-                              <span className="font-bold text-rose-800">Dikkat! {activeConflicts.length} Çakışma Tespit Edildi!</span>
-                              <span className="text-slate-500 text-[9px] font-medium leading-none hidden md:inline">| Detaylar için tablodaki ünlem simgelerini kontrol edin.</span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Sağ Kısım: Akıllı Otomasyon Doluluk İstatistiği */}
-                        <div className="flex items-center space-x-2 bg-white px-2 py-1 rounded-md border border-slate-100 shadow-xs self-start sm:self-auto shrink-0">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                          </span>
-                          <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
-                            DOLULUK:
-                          </span>
-                          <span className="text-[10px] font-extrabold text-blue-600 font-mono">
-                            %{totalAssignedHours > 0 ? Math.round((totalPlacedHours / totalAssignedHours) * 100) : 0}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-bold">
-                            ({totalPlacedHours}/{totalAssignedHours} Saat)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* AKILLI ÇİZELGELEME VE OTOMASYON (Sade & Az Yer Kaplayan Tasarım) */}
-                    <div className="mt-3 p-2 bg-slate-50 border border-slate-200/60 rounded-xl flex items-center justify-start gap-2 flex-wrap shrink-0">
+                    <div className="mt-3 p-2 bg-slate-50 border border-slate-200/60 rounded-xl flex items-center justify-between gap-2 flex-wrap shrink-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {scheduleViewMode === "teacher" && (
                           <>
@@ -2598,6 +2479,23 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           <Info className="w-3.5 h-3.5 shrink-0" />
                           <span>Kısayollar & Mouse Kontrolleri</span>
                         </button>
+                      </div>
+
+                      {/* Sağ Kısım: Akıllı Otomasyon Doluluk İstatistiği */}
+                      <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs shrink-0 self-center">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                          DOLULUK:
+                        </span>
+                        <span className="text-[10px] font-extrabold text-blue-600 font-mono">
+                          %{totalAssignedHours > 0 ? Math.round((totalPlacedHours / totalAssignedHours) * 100) : 0}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-bold">
+                          ({totalPlacedHours}/{totalAssignedHours} Saat)
+                        </span>
                       </div>
                     </div>
 
@@ -2692,6 +2590,32 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                               <span className="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed">
                                 Otomatik dağıtımda öğretmenlerin programlarında gün içinde en fazla bu kadar ders saati pencere/boşluk kalmasına izin verilir.
                               </span>
+                            </div>
+
+                            {/* Option 3: Max Depth Slider */}
+                            <div className="flex flex-col gap-1.5 col-span-1 md:col-span-3 border-t border-slate-100 pt-3">
+                              <span className="font-bold text-slate-700 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                Çözüm Derinliği (Arama Derinliği):
+                              </span>
+                              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 mt-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <input
+                                    type="range"
+                                    min="5"
+                                    max="30"
+                                    value={state.settings.maxDepth ?? getDefaultMaxDepth(state.teachers.length)}
+                                    onChange={(e) => handleUpdateSchoolSettings("maxDepth", parseInt(e.target.value, 10))}
+                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                  />
+                                  <span className="text-sm font-extrabold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 font-mono w-12 text-center">
+                                    {state.settings.maxDepth ?? getDefaultMaxDepth(state.teachers.length)}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-semibold leading-relaxed md:max-w-md">
+                                  <strong>Çözüm Derinliği:</strong> Algoritmanın karmaşık çakışmaları çözmek için yapacağı arama derinliğini belirler. maxDepth parametresiyle entegre arama döngüsü sayesinde, arama derinliği arttıkça algoritma öğretmen boşluklarını kapatmak ve tek kalan dersleri birleştirmek için daha fazla yer değiştirme ve swap denemesi yapabilir.
+                                </span>
+                              </div>
                             </div>
 
                             {/* Ek Algoritma Optimizasyonları */}
@@ -2829,43 +2753,59 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                   </div>
 
                   {/* ÖĞRETMEN, SINIF VE ATÖLYE DURUM VE SEÇİM LİSTELERİ & SAĞ PANEL DETAYLARI (2 Kolonlu Kompakt Tasarım) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 overflow-hidden">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 shrink-0 overflow-hidden">
                     
                     {/* SOL KOLON: DURUM VE SEÇİM TABLOSU */}
-                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-2 overflow-hidden">
+                    <div 
+                      onClick={() => setKbdFocusArea('entities')}
+                      className={`bg-white p-2.5 rounded-2xl border transition-all duration-200 shadow-sm flex flex-col gap-2 overflow-hidden cursor-pointer ${
+                        kbdFocusArea === 'entities' 
+                          ? "ring-2 ring-indigo-500/10 border-indigo-400" 
+                          : "border-slate-200/80"
+                      }`}
+                    >
                       <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
-                        <span className="text-xs font-black text-slate-800 uppercase tracking-widest block">
-                          {scheduleViewMode === "teacher"
-                            ? "👨‍🏫 ÖĞRETMEN DURUM VE SEÇİM TABLOSU"
-                            : scheduleViewMode === "class"
-                            ? "🏫 SINIF DURUM VE SEÇİM TABLOSU"
-                            : "🛠️ ATÖLYE DURUM VE SEÇİM TABLOSU"}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border border-slate-200/40 px-2 py-0.5 rounded-full">
-                          Seçim için satıra tıklayın
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-800 uppercase tracking-widest block">
+                            {scheduleViewMode === "teacher"
+                              ? "👨‍🏫 ÖĞRETMEN DURUM VE SEÇİM TABLOSU"
+                              : scheduleViewMode === "class"
+                              ? "🏫 SINIF DURUM VE SEÇİM TABLOSU"
+                              : "🛠️ ATÖLYE DURUM VE SEÇİM TABLOSU"}
+                          </span>
+                          {kbdFocusArea === 'entities' && (
+                            <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-700 font-black px-1.5 py-0.5 rounded border border-emerald-200 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              KLAVYE OK TUŞLARI ETKİN
+                            </span>
+                          )}
+                        </div>
+                        {kbdFocusArea !== 'entities' && (
+                          <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border border-slate-200/40 px-2 py-0.5 rounded-full">
+                            Seçim için satıra tıklayın
+                          </span>
+                        )}
                       </div>
 
                       {/* Arama/Filtreleme Kutusu */}
-                      <div className="relative shrink-0 mb-1">
-                        <input
-                          type="text"
-                          placeholder={
-                            scheduleViewMode === "teacher"
-                              ? "Öğretmen adına göre hızlı ara..."
-                              : scheduleViewMode === "class"
-                              ? "Sınıf adına göre hızlı ara..."
-                              : "Atölye/derslik adına göre hızlı ara..."
-                          }
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-slate-50 text-xs text-slate-800 placeholder-slate-400 pl-8 pr-3.5 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all font-medium"
-                        />
-                        <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
-                      </div>
+                      {scheduleViewMode !== "teacher" && (
+                        <div className="relative shrink-0 mb-1">
+                          <input
+                            type="text"
+                            placeholder={
+                              scheduleViewMode === "class"
+                                ? "Sınıf adına göre hızlı ara..."
+                                : "Atölye/derslik adına göre hızlı ara..."
+                            }
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-slate-50 text-xs text-slate-800 placeholder-slate-400 pl-8 pr-3.5 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all font-medium"
+                          />
+                          <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                        </div>
+                      )}
 
-                      {/* Dikey Tablo Alanı: Tam olarak ilk 10 tanesi alt alta sığacak şekilde (10 taneden sonra kendi içinde scroll olur), max-height ve scrollbar eklendi */}
-                      {/* Dikey Tablo Alanı: Excel görünümlü, ince çizgili, dar satırlı ve belirgin seçim alanlı yeni tasarım */}
+                      {/* Dikey Tablo Alanı */}
                       <div className="overflow-y-auto max-h-[330px] w-full border border-slate-200/80 rounded-xl scrollbar-thin scrollbar-thumb-slate-200 bg-white">
                         <table className="w-full text-left text-xs text-slate-600 border-collapse">
                           <thead>
@@ -2874,22 +2814,22 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                 <>
                                   <th className="py-1 px-2 font-black border border-slate-200 bg-slate-50">Öğretmen Adı</th>
                                   <th className="py-1 px-2 font-black border border-slate-200 bg-slate-50">Branşı</th>
-                                  <th className="py-1 px-2 font-black text-center w-24 border border-slate-200 bg-slate-50">Atanan HDS</th>
-                                  <th className="py-1 px-2 font-black text-center w-24 border border-slate-200 bg-slate-50">Yerleşen</th>
+                                  <th className="py-1 px-2 font-black text-center w-14 border border-slate-200 bg-slate-50">Atn.</th>
+                                  <th className="py-1 px-2 font-black text-center w-14 border border-slate-200 bg-slate-50">Yrl.</th>
                                 </>
                               )}
                               {scheduleViewMode === "class" && (
                                 <>
                                   <th className="py-1 px-2 font-black border border-slate-200 bg-slate-50">Sınıf Adı</th>
-                                  <th className="py-1 px-2 font-black text-center w-24 border border-slate-200 bg-slate-50">Atanan HDS</th>
-                                  <th className="py-1 px-2 font-black text-center w-24 border border-slate-200 bg-slate-50">Yerleşen</th>
+                                  <th className="py-1 px-2 font-black text-center w-14 border border-slate-200 bg-slate-50">Atn.</th>
+                                  <th className="py-1 px-2 font-black text-center w-14 border border-slate-200 bg-slate-50">Yrl.</th>
                                 </>
                               )}
                               {scheduleViewMode === "classroom" && (
                                 <>
                                   <th className="py-1 px-2 font-black border border-slate-200 bg-slate-50">Atölye/Derslik Adı</th>
                                   <th className="py-1 px-2 font-black border border-slate-200 bg-slate-50">Kullanım Türü</th>
-                                  <th className="py-1 px-2 font-black text-center w-24 border border-slate-200 bg-slate-50">Yerleşen</th>
+                                  <th className="py-1 px-2 font-black text-center w-14 border border-slate-200 bg-slate-50">Yrl.</th>
                                 </>
                               )}
                             </tr>
@@ -3023,7 +2963,14 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                     </div>
 
                     {/* SAĞ KOLON: ÜZERİNE TIKLANAN ELEMANIN DETAYLI DERS YERLEŞİM BİLGİSİ */}
-                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-2 overflow-hidden">
+                    <div 
+                      onClick={() => setKbdFocusArea('assignments')}
+                      className={`bg-white p-2.5 rounded-2xl border transition-all duration-200 shadow-sm flex flex-col gap-2 overflow-hidden cursor-pointer ${
+                        kbdFocusArea === 'assignments' 
+                          ? "ring-2 ring-indigo-500/10 border-indigo-400" 
+                          : "border-slate-200/80"
+                      }`}
+                    >
                       {(() => {
                         if (!viewingEntityId) {
                           return (
@@ -3063,72 +3010,89 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           return (
                             <div className="flex flex-col h-full overflow-hidden">
                               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
-                                <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5">
-                                  <span>👨‍🏫 {teacher.name} Atama Detayları</span>
-                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5">
+                                    <span>👨‍🏫 {teacher.name} Atama Detayları</span>
+                                  </h4>
+                                  {kbdFocusArea === 'assignments' && (
+                                    <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-700 font-black px-1.5 py-0.5 rounded border border-emerald-200 animate-pulse">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      KLAVYE OK TUŞLARI ETKİN
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[10px] bg-blue-50 text-blue-700 font-extrabold px-2 py-0.5 rounded border border-blue-100">
                                   {teacherAssignments.length} Farklı Atama
                                 </span>
                               </div>
 
-                              <div className="overflow-y-auto max-h-[330px] divide-y divide-slate-100/60 bg-slate-50/30 rounded-xl border border-slate-100/80 mt-1">
+                              <div className="overflow-y-auto max-h-[350px] min-h-[280px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin">
                                 {teacherAssignments.length === 0 ? (
                                   <div className="text-center py-8 text-slate-400 text-xs italic">
                                     Öğretmene atanmış ders bulunmuyor.
                                   </div>
                                 ) : (
-                                  teacherAssignments.map(a => {
-                                    const placedHours = getAssignmentPlacedHours(a.id);
-                                    const isComplete = placedHours === a.weeklyHours;
-                                    const course = coursesMap.get(a.courseId);
-                                    const className = classesMap.get(a.classId)?.name || "Bilinmeyen Sınıf";
-                                    const isSelected = selectedAssignmentId === a.id;
+                                  <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100 text-[10px] text-slate-700 font-extrabold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                                        <th className="py-1 px-2 border border-slate-200">Ders (Sınıf)</th>
+                                        <th className="py-1 px-2 text-center w-12 border border-slate-200">Atn.</th>
+                                        <th className="py-1 px-2 text-center w-12 border border-slate-200">Yrl.</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {teacherAssignments.map(a => {
+                                        const placedHours = getAssignmentPlacedHours(a.id);
+                                        const isComplete = placedHours === a.weeklyHours;
+                                        const course = coursesMap.get(a.courseId);
+                                        const className = classesMap.get(a.classId)?.name || "Bilinmeyen Sınıf";
+                                        const isSelected = selectedAssignmentId === a.id;
 
-                                    return (
-                                      <div 
-                                        key={a.id} 
-                                        onClick={() => setSelectedAssignmentId(a.id)}
-                                        onContextMenu={(e) => {
-                                          e.preventDefault();
-                                          setSelectedAssignmentId(a.id);
-                                          setAssignmentContextMenu({
-                                            visible: true,
-                                            x: e.clientX,
-                                            y: e.clientY,
-                                            assignmentId: a.id
-                                          });
-                                        }}
-                                        draggable={true}
-                                        onDragStart={(e) => {
-                                          e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
-                                          e.dataTransfer.effectAllowed = "copy";
-                                        }}
-                                        className={`p-2.5 flex flex-col justify-center cursor-pointer border-l-4 transition-all duration-150 ${
-                                          isSelected 
-                                            ? "bg-blue-50/80 border-blue-600 shadow-sm" 
-                                            : "hover:bg-slate-50 border-transparent"
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <div>
-                                            <div className="font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
-                                              {course?.name} <span className="text-[9px] text-slate-400 font-mono font-medium">({course?.code})</span>
-                                              {isSelected && (
-                                                <span className="text-[8px] bg-blue-100 text-blue-800 font-black px-1 rounded">AKTİF</span>
-                                              )}
-                                            </div>
-                                            <div className="text-[10px] text-slate-500 font-semibold mt-0.5">Sınıf: {className}</div>
-                                          </div>
-                                          <div className="flex items-center gap-2 shrink-0">
-                                            <span className="text-[10px] font-mono text-slate-500">Atanan: <strong>{a.weeklyHours} s</strong></span>
-                                            <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg ${isComplete ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"}`}>
-                                              Yerleşen: {placedHours} s
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
+                                        return (
+                                          <tr 
+                                            key={a.id} 
+                                            onClick={() => setSelectedAssignmentId(a.id)}
+                                            onContextMenu={(e) => {
+                                              e.preventDefault();
+                                              setSelectedAssignmentId(a.id);
+                                              setAssignmentContextMenu({
+                                                visible: true,
+                                                x: e.clientX,
+                                                y: e.clientY,
+                                                assignmentId: a.id
+                                              });
+                                            }}
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
+                                              e.dataTransfer.effectAllowed = "copy";
+                                            }}
+                                            className={`hover:bg-blue-50/50 cursor-pointer transition-colors border-b border-slate-200/60 ${
+                                              isSelected 
+                                                ? "bg-blue-100/70 font-semibold text-blue-900" 
+                                                : "text-slate-700 bg-white"
+                                            }`}
+                                          >
+                                            <td className="py-1 px-2 border border-slate-200">
+                                              <div className="flex items-center gap-1">
+                                                <span>{course?.name} ({className})</span>
+                                                <span className="text-[9px] text-slate-400 font-mono font-medium">({course?.code})</span>
+                                                {isSelected && (
+                                                  <span className="text-[8px] bg-blue-100 text-blue-800 font-black px-1 rounded">AKTİF</span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="py-1 px-2 text-center font-mono font-bold border border-slate-200">{a.weeklyHours}</td>
+                                            <td className={`py-1 px-2 text-center font-mono font-bold border border-slate-200 ${
+                                              isComplete ? "text-emerald-600 bg-emerald-50/30" : "text-rose-600 bg-rose-50/30"
+                                            }`}>
+                                              {placedHours}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
                                 )}
                               </div>
                             </div>
@@ -3143,72 +3107,89 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           return (
                             <div className="flex flex-col h-full overflow-hidden">
                               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
-                                <h4 className="text-xs font-black text-indigo-800 uppercase flex items-center gap-1.5">
-                                  <span>🏫 {cls.name} Sınıf Atama Detayları</span>
-                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-xs font-black text-indigo-800 uppercase flex items-center gap-1.5">
+                                    <span>🏫 {cls.name} Sınıf Atama Detayları</span>
+                                  </h4>
+                                  {kbdFocusArea === 'assignments' && (
+                                    <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-700 font-black px-1.5 py-0.5 rounded border border-emerald-200 animate-pulse">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      KLAVYE OK TUŞLARI ETKİN
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[10px] bg-indigo-50 text-indigo-700 font-extrabold px-2 py-0.5 rounded border border-indigo-100">
                                   {classAssignments.length} Farklı Atama
                                 </span>
                               </div>
 
-                              <div className="overflow-y-auto max-h-[330px] divide-y divide-slate-100/60 bg-slate-50/30 rounded-xl border border-slate-100/80 mt-1">
+                              <div className="overflow-y-auto max-h-[350px] min-h-[280px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin">
                                 {classAssignments.length === 0 ? (
                                   <div className="text-center py-8 text-slate-400 text-xs italic">
                                     Sınıfa tanımlanmış ders bulunmuyor.
                                   </div>
                                 ) : (
-                                  classAssignments.map(a => {
-                                    const placedHours = getAssignmentPlacedHours(a.id);
-                                    const isComplete = placedHours === a.weeklyHours;
-                                    const course = coursesMap.get(a.courseId);
-                                    const teacherName = teachersMap.get(a.teacherId)?.name || "Bilinmeyen Öğretmen";
-                                    const isSelected = selectedAssignmentId === a.id;
+                                  <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100 text-[10px] text-slate-700 font-extrabold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                                        <th className="py-1 px-2 border border-slate-200">Ders (Öğretmen)</th>
+                                        <th className="py-1 px-2 text-center w-12 border border-slate-200">Atn.</th>
+                                        <th className="py-1 px-2 text-center w-12 border border-slate-200">Yrl.</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {classAssignments.map(a => {
+                                        const placedHours = getAssignmentPlacedHours(a.id);
+                                        const isComplete = placedHours === a.weeklyHours;
+                                        const course = coursesMap.get(a.courseId);
+                                        const teacherName = teachersMap.get(a.teacherId)?.name || "Bilinmeyen Öğretmen";
+                                        const isSelected = selectedAssignmentId === a.id;
 
-                                    return (
-                                      <div 
-                                        key={a.id} 
-                                        onClick={() => setSelectedAssignmentId(a.id)}
-                                        onContextMenu={(e) => {
-                                          e.preventDefault();
-                                          setSelectedAssignmentId(a.id);
-                                          setAssignmentContextMenu({
-                                            visible: true,
-                                            x: e.clientX,
-                                            y: e.clientY,
-                                            assignmentId: a.id
-                                          });
-                                        }}
-                                        draggable={true}
-                                        onDragStart={(e) => {
-                                          e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
-                                          e.dataTransfer.effectAllowed = "copy";
-                                        }}
-                                        className={`p-2.5 flex flex-col justify-center cursor-pointer border-l-4 transition-all duration-150 ${
-                                          isSelected 
-                                            ? "bg-blue-50/80 border-blue-600 shadow-sm" 
-                                            : "hover:bg-slate-50 border-transparent"
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <div>
-                                            <div className="font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
-                                              {course?.name} <span className="text-[9px] text-slate-400 font-mono font-medium">({course?.code})</span>
-                                              {isSelected && (
-                                                <span className="text-[8px] bg-blue-100 text-blue-800 font-black px-1 rounded">AKTİF</span>
-                                              )}
-                                            </div>
-                                            <div className="text-[10px] text-slate-500 font-semibold mt-0.5">Öğretmen: {teacherName}</div>
-                                          </div>
-                                          <div className="flex items-center gap-2 shrink-0">
-                                            <span className="text-[10px] font-mono text-slate-500">Atanan: <strong>{a.weeklyHours} s</strong></span>
-                                            <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg ${isComplete ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"}`}>
-                                              Yerleşen: {placedHours} s
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
+                                        return (
+                                          <tr 
+                                            key={a.id} 
+                                            onClick={() => setSelectedAssignmentId(a.id)}
+                                            onContextMenu={(e) => {
+                                              e.preventDefault();
+                                              setSelectedAssignmentId(a.id);
+                                              setAssignmentContextMenu({
+                                                visible: true,
+                                                x: e.clientX,
+                                                y: e.clientY,
+                                                assignmentId: a.id
+                                              });
+                                            }}
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
+                                              e.dataTransfer.effectAllowed = "copy";
+                                            }}
+                                            className={`hover:bg-blue-50/50 cursor-pointer transition-colors border-b border-slate-200/60 ${
+                                              isSelected 
+                                                ? "bg-blue-100/70 font-semibold text-blue-900" 
+                                                : "text-slate-700 bg-white"
+                                            }`}
+                                          >
+                                            <td className="py-1 px-2 border border-slate-200">
+                                              <div className="flex items-center gap-1">
+                                                <span>{course?.name} ({teacherName})</span>
+                                                <span className="text-[9px] text-slate-400 font-mono font-medium">({course?.code})</span>
+                                                {isSelected && (
+                                                  <span className="text-[8px] bg-blue-100 text-blue-800 font-black px-1 rounded">AKTİF</span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="py-1 px-2 text-center font-mono font-bold border border-slate-200">{a.weeklyHours}</td>
+                                            <td className={`py-1 px-2 text-center font-mono font-bold border border-slate-200 ${
+                                              isComplete ? "text-emerald-600 bg-emerald-50/30" : "text-rose-600 bg-rose-50/30"
+                                            }`}>
+                                              {placedHours}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
                                 )}
                               </div>
                             </div>
@@ -3253,74 +3234,88 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                               {/* SECTION 1: Atölyeye Atanmış Dersler (Ders Planlama) */}
                               <div className="flex flex-col shrink-0">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
-                                  <h4 className="text-xs font-black text-amber-800 uppercase flex items-center gap-1.5">
-                                    <span>🛠️ {cr.name} Atama ve Planlama</span>
-                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-black text-amber-800 uppercase flex items-center gap-1.5">
+                                      <span>🛠️ {cr.name} Atama ve Planlama</span>
+                                    </h4>
+                                    {kbdFocusArea === 'assignments' && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-700 font-black px-1.5 py-0.5 rounded border border-emerald-200 animate-pulse">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        KLAVYE OK TUŞLARI ETKİN
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className="text-[10px] bg-amber-50 text-amber-700 font-extrabold px-2 py-0.5 rounded border border-amber-100">
                                     {classroomAssignments.length} Atama
                                   </span>
                                 </div>
-                                <div className="overflow-y-auto max-h-[180px] divide-y divide-slate-100/60 bg-amber-50/10 rounded-xl border border-amber-100/60 mt-1">
+                                <div className="overflow-y-auto max-h-[180px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin font-semibold">
                                   {classroomAssignments.length === 0 ? (
                                     <div className="text-center py-6 text-slate-400 text-xs italic">
                                       Atölyeye tanımlanmış planlanabilir ders bulunmuyor.
                                     </div>
                                   ) : (
-                                    classroomAssignments.map(a => {
-                                      const placedHours = getAssignmentPlacedHours(a.id);
-                                      const isComplete = placedHours === a.weeklyHours;
-                                      const course = coursesMap.get(a.courseId);
-                                      const className = classesMap.get(a.classId)?.name || "Bilinmeyen Sınıf";
-                                      const teacherName = a.teacherId ? a.teacherId.split(",").map(id => teachersMap.get(id)?.name).filter(Boolean).join(", ") : "Bilinmeyen Öğretmen";
-                                      const isSelected = selectedAssignmentId === a.id;
+                                    <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
+                                      <thead>
+                                        <tr className="bg-slate-100 text-[10px] text-slate-700 font-extrabold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                                          <th className="py-1 px-2 border border-slate-200">Ders (Sınıf / Öğr.)</th>
+                                          <th className="py-1 px-2 text-center w-12 border border-slate-200">Atn.</th>
+                                          <th className="py-1 px-2 text-center w-12 border border-slate-200">Yrl.</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {classroomAssignments.map(a => {
+                                          const placedHours = getAssignmentPlacedHours(a.id);
+                                          const isComplete = placedHours === a.weeklyHours;
+                                          const course = coursesMap.get(a.courseId);
+                                          const className = classesMap.get(a.classId)?.name || "Bilinmeyen Sınıf";
+                                          const teacherName = a.teacherId ? a.teacherId.split(",").map(id => teachersMap.get(id)?.name).filter(Boolean).join(", ") : "Bilinmeyen Öğretmen";
+                                          const isSelected = selectedAssignmentId === a.id;
 
-                                      return (
-                                        <div 
-                                          key={a.id} 
-                                          onClick={() => setSelectedAssignmentId(a.id)}
-                                          onContextMenu={(e) => {
-                                            e.preventDefault();
-                                            setSelectedAssignmentId(a.id);
-                                            setAssignmentContextMenu({
-                                              visible: true,
-                                              x: e.clientX,
-                                              y: e.clientY,
-                                              assignmentId: a.id
-                                            });
-                                          }}
-                                          draggable={true}
-                                          onDragStart={(e) => {
-                                            e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
-                                            e.dataTransfer.effectAllowed = "copy";
-                                          }}
-                                          className={`p-2 flex flex-col justify-center cursor-pointer border-l-4 transition-all duration-150 ${
-                                            isSelected 
-                                              ? "bg-amber-50/80 border-amber-500 shadow-sm font-semibold" 
-                                              : "hover:bg-slate-50 border-transparent"
-                                          }`}
-                                        >
-                                          <div className="flex items-center justify-between w-full">
-                                            <div className="max-w-[60%]">
-                                              <div className="font-bold text-slate-800 text-[10.5px] flex items-center gap-1.5 truncate">
-                                                {course?.name}
-                                                {isSelected && (
-                                                  <span className="text-[8px] bg-amber-100 text-amber-800 font-black px-1 rounded shrink-0">AKTİF</span>
-                                                )}
-                                              </div>
-                                              <div className="text-[9.5px] text-slate-500 font-semibold mt-0.5 truncate">
-                                                {className} • {teacherName}
-                                              </div>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1 shrink-0">
-                                              <span className="text-[9px] font-mono text-slate-500 leading-none">HDS: <strong>{a.weeklyHours} s</strong></span>
-                                              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${isComplete ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"}`}>
-                                                Yerleşen: {placedHours}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })
+                                          return (
+                                            <tr 
+                                              key={a.id} 
+                                              onClick={() => setSelectedAssignmentId(a.id)}
+                                              onContextMenu={(e) => {
+                                                e.preventDefault();
+                                                setSelectedAssignmentId(a.id);
+                                                setAssignmentContextMenu({
+                                                  visible: true,
+                                                  x: e.clientX,
+                                                  y: e.clientY,
+                                                  assignmentId: a.id
+                                                });
+                                              }}
+                                              draggable={true}
+                                              onDragStart={(e) => {
+                                                e.dataTransfer.setData("text/plain", JSON.stringify({ assignmentId: a.id }));
+                                                e.dataTransfer.effectAllowed = "copy";
+                                              }}
+                                              className={`hover:bg-blue-50/50 cursor-pointer transition-colors border-b border-slate-200/60 ${
+                                                isSelected 
+                                                  ? "bg-blue-100/70 font-semibold text-blue-900" 
+                                                  : "text-slate-700 bg-white"
+                                              }`}
+                                            >
+                                              <td className="py-1 px-2 border border-slate-200">
+                                                <div className="flex items-center gap-1">
+                                                  <span>{course?.name} ({className} - {teacherName})</span>
+                                                  {isSelected && (
+                                                    <span className="text-[8px] bg-blue-100 text-blue-800 font-black px-1 rounded">AKTİF</span>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              <td className="py-1 px-2 text-center font-mono font-bold border border-slate-200">{a.weeklyHours}</td>
+                                              <td className={`py-1 px-2 text-center font-mono font-bold border border-slate-200 ${
+                                                isComplete ? "text-emerald-600 bg-emerald-50/30" : "text-rose-600 bg-rose-50/30"
+                                              }`}>
+                                                {placedHours}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
                                   )}
                                 </div>
                               </div>
@@ -3336,23 +3331,34 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                   </span>
                                 </div>
 
-                                <div className="overflow-y-auto max-h-[160px] divide-y divide-slate-100/60 bg-slate-50/30 rounded-xl border border-slate-100/80 mt-1">
+                                <div className="overflow-y-auto max-h-[160px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin">
                                   {classroomPlacements.length === 0 ? (
                                     <div className="text-center py-6 text-slate-400 text-xs italic">
                                       Atölyede henüz yerleştirilmiş ders bulunmuyor.
                                     </div>
                                   ) : (
-                                    classroomPlacements.map((p, idx) => (
-                                      <div key={idx} className="p-2 flex items-center justify-between text-[10.5px] hover:bg-slate-50">
-                                        <div>
-                                          <div className="font-bold text-slate-800">{p.className} - {p.courseName}</div>
-                                          <div className="text-[9.5px] text-slate-500 font-medium mt-0.5">Sorumlu: {p.teacherName}</div>
-                                        </div>
-                                        <div className="bg-slate-100 px-2 py-0.5 rounded text-[9.5px] font-semibold text-slate-700 border border-slate-200/50">
-                                          {state.settings.days[p.dayIdx].substring(0, 3)} - {p.periodIdx + 1}. Ders
-                                        </div>
-                                      </div>
-                                    ))
+                                    <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
+                                      <thead>
+                                        <tr className="bg-slate-100 text-[10px] text-slate-700 font-extrabold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                                          <th className="py-1 px-2 border border-slate-200">Sınıf - Ders (Sorumlu)</th>
+                                          <th className="py-1 px-2 text-center w-28 border border-slate-200">Zaman</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {classroomPlacements.map((p, idx) => (
+                                          <tr key={idx} className="hover:bg-slate-50/50 border-b border-slate-200/60">
+                                            <td className="py-1 px-2 border border-slate-200 text-slate-700">
+                                              <span className="font-semibold">{p.className}</span> - {p.courseName} <span className="text-[10px] text-slate-400">({p.teacherName})</span>
+                                            </td>
+                                            <td className="py-1 px-2 text-center border border-slate-200 bg-slate-50/50">
+                                              <span className="text-[10px] font-medium text-slate-600">
+                                                {state.settings.days[p.dayIdx].substring(0, 3)} - {p.periodIdx + 1}. Ders
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   )}
                                 </div>
                               </div>
@@ -3889,6 +3895,28 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                         <button
                           onClick={() => {
+                            optimizeGapsForTeacher(teacherContextMenu.teacherId);
+                            setTeacherContextMenu(null);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50 hover:text-amber-700 text-amber-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Bu Öğretmenin Boşluğunu Azalt</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            removeSingleLessonDaysForTeacher(teacherContextMenu.teacherId);
+                            setTeacherContextMenu(null);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-indigo-50 hover:text-indigo-700 text-indigo-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer"
+                        >
+                          <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Bu Öğretmenin Tek Dersini Kaldır</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
                             setConfirmModal({
                               isOpen: true,
                               title: "Tüm Dersleri Sil",
@@ -3939,6 +3967,20 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                     <h3 className="text-base font-bold text-slate-800 tracking-tight">DerSayar Algoritması hesaplamalar yapıyor...</h3>
                     <p className="text-xs text-slate-400">Kısıtlar optimize ediliyor</p>
                   </div>
+
+                  {schedulingProgress.targetTeacherName && (
+                    <div className="bg-blue-50 border border-blue-100/60 rounded-xl py-2.5 px-3.5 flex flex-col items-center justify-center gap-0.5 max-w-xs mx-auto shadow-sm">
+                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">İşlem Yapılan Öğretmen</span>
+                      <span className="text-sm font-extrabold text-blue-800 truncate max-w-full">👨‍🏫 {schedulingProgress.targetTeacherName}</span>
+                    </div>
+                  )}
+
+                  {schedulingProgress.targetClassName && (
+                    <div className="bg-purple-50 border border-purple-100/60 rounded-xl py-2.5 px-3.5 flex flex-col items-center justify-center gap-0.5 max-w-xs mx-auto shadow-sm">
+                      <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">İşlem Yapılan Sınıf</span>
+                      <span className="text-sm font-extrabold text-purple-800 truncate max-w-full">🏫 {schedulingProgress.targetClassName}</span>
+                    </div>
+                  )}
 
                   {/* Minimalist Live Counters Grid */}
                   <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3">
@@ -4442,19 +4484,45 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                   </button>
 
                   {assign.teacherId && (
-                    <button
-                      onClick={() => {
-                        const firstTId = assign.teacherId!.split(",")[0].trim();
-                        setScheduleViewMode("teacher");
-                        setViewingEntityId(firstTId);
-                        showToast(`${teachersMap.get(firstTId)?.name || "Öğretmen"} programına geçildi.`, "success");
-                        setAssignmentContextMenu(null);
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 hover:bg-teal-50 hover:text-teal-700 text-teal-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer border-none bg-transparent"
-                    >
-                      <User className="w-3.5 h-3.5 text-teal-500" />
-                      <span>Öğretmene Bağlan</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          const firstTId = assign.teacherId!.split(",")[0].trim();
+                          setScheduleViewMode("teacher");
+                          setViewingEntityId(firstTId);
+                          showToast(`${teachersMap.get(firstTId)?.name || "Öğretmen"} programına geçildi.`, "success");
+                          setAssignmentContextMenu(null);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-teal-50 hover:text-teal-700 text-teal-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer border-none bg-transparent"
+                      >
+                        <User className="w-3.5 h-3.5 text-teal-500" />
+                        <span>Öğretmene Bağlan</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const firstTId = assign.teacherId!.split(",")[0].trim();
+                          optimizeGapsForTeacher(firstTId);
+                          setAssignmentContextMenu(null);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-amber-50 hover:text-amber-700 text-amber-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer border-none bg-transparent"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Bu Öğretmenin Boşluğunu Azalt</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const firstTId = assign.teacherId!.split(",")[0].trim();
+                          removeSingleLessonDaysForTeacher(firstTId);
+                          setAssignmentContextMenu(null);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-indigo-50 hover:text-indigo-700 text-indigo-600 rounded-lg text-xs font-bold flex items-center gap-2 transition cursor-pointer border-none bg-transparent"
+                      >
+                        <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Bu Öğretmenin Tek Dersini Kaldır</span>
+                      </button>
+                    </>
                   )}
 
                   {assign.classId && (

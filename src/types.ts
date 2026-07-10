@@ -20,6 +20,7 @@ export interface SchoolSettings {
   lunchBreakDuration?: number; // Öğle arası süresi (dakika)
   groupLessonsMode?: 'same_day' | 'different_days_strict' | 'different_days_flexible'; // Ders gruplarının yerleşme biçimi
   maxTeacherDailyGaps?: number; // Bir öğretmenin ders programında otomatik atandığında günlük en fazla kaç ders boşluk verelim [sayı]
+  maxDepth?: number; // Çözüm Derinliği (5-30)
 }
 
 export interface UnavailabilityMap {
