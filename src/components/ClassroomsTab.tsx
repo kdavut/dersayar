@@ -28,6 +28,25 @@ export default function ClassroomsTab() {
 
   const state = historyState.current;
 
+  const [assignmentSearch, setAssignmentSearch] = React.useState("");
+
+  const filteredAssignments = React.useMemo(() => {
+    return state.assignments.filter((assign) => {
+      if (!assignmentSearch.trim()) return true;
+      const classObj = state.classes.find(c => c.id === assign.classId);
+      const courseObj = state.courses.find(co => co.id === assign.courseId);
+      const teacherNames = assign.teacherId 
+        ? assign.teacherId.split(",").map(id => state.teachers.find(t => t.id === id)?.name).filter(Boolean).join(", ") 
+        : "";
+      const searchLower = assignmentSearch.toLowerCase();
+      return (
+        (classObj?.name || "").toLowerCase().includes(searchLower) ||
+        (courseObj?.name || "").toLowerCase().includes(searchLower) ||
+        (teacherNames || "").toLowerCase().includes(searchLower)
+      );
+    });
+  }, [state.assignments, state.classes, state.courses, state.teachers, assignmentSearch]);
+
   const handleClassroomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassroom.name.trim() || !newClassroom.shortName.trim()) {
@@ -345,7 +364,17 @@ export default function ClassroomsTab() {
 
             {/* Yeni Sınıf-Ders Atama Paneli */}
             <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
-              <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2.5">Sınıf & Ders Atama Butonu</h4>
+              <div className="mb-3">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Ders - Sınıf Arama</label>
+                <input
+                  type="text"
+                  value={assignmentSearch}
+                  onChange={(e) => setAssignmentSearch(e.target.value)}
+                  placeholder="Sınıf, ders veya öğretmen adı arayın..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                />
+              </div>
+              <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2.5">Sınıf & Ders Atama</h4>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <select
@@ -354,7 +383,7 @@ export default function ClassroomsTab() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                   >
                     <option value="">-- Atanacak Sınıf ve Dersi Seçin --</option>
-                    {state.assignments.map((assign) => {
+                    {filteredAssignments.map((assign) => {
                       const classObj = state.classes.find(c => c.id === assign.classId);
                       const courseObj = state.courses.find(co => co.id === assign.courseId);
                       const teacherNames = assign.teacherId ? assign.teacherId.split(",").map(id => state.teachers.find(t => t.id === id)?.name).filter(Boolean).join(", ") : "Bilinmiyor";

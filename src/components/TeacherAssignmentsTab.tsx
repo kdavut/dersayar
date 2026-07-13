@@ -105,176 +105,133 @@ export default function TeacherAssignmentsTab() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 text-slate-800"
     >
-      {/* Üst Özet Tablosu */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-700 flex items-center gap-2 pb-2 border-b border-slate-100">
-          <span>📊 Ders Atama Durum Özeti</span>
-        </h3>
-        <div className="overflow-x-auto border border-slate-200 rounded-xl">
-          <table className="w-full text-xs text-left text-slate-700 border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                <th className="py-2.5 px-4 font-bold">DERS GRUPLAMA / DURUM</th>
-                <th className="py-2.5 px-4 font-bold text-center">DERS ADEDİ</th>
-                <th className="py-2.5 px-4 font-bold text-center">TOPLAM SAAT (HDS)</th>
-                <th className="py-2.5 px-4 font-bold text-right">EYLEMLER</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-150">
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-bold text-slate-700 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                  Ataması Gereken Dersler
-                </td>
-                <td className="py-3 px-4 text-center font-extrabold text-blue-700 font-mono text-sm">
-                  {state.assignments.length}
-                </td>
-                <td className="py-3 px-4 text-center font-bold text-slate-600 font-mono text-sm">
-                  {state.assignments.reduce((sum, a) => sum + a.weeklyHours, 0)}s
-                </td>
-                <td className="py-3 px-4 text-right">
-                  <span className="text-[10px] text-slate-400 font-medium italic">Sistemdeki toplam ders sayısı</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-bold text-slate-700 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                  Atanan Dersler
-                </td>
-                <td className="py-3 px-4 text-center font-extrabold text-emerald-700 font-mono text-sm">
-                  {state.assignments.filter(a => a.teacherId && a.teacherId.trim() !== "").length}
-                </td>
-                <td className="py-3 px-4 text-center font-bold text-slate-600 font-mono text-sm">
-                  {state.assignments.filter(a => a.teacherId && a.teacherId.trim() !== "").reduce((sum, a) => sum + a.weeklyHours, 0)}s
-                </td>
-                <td className="py-3 px-4 text-right">
-                  <span className="text-[10px] text-slate-400 font-medium italic">Öğretmen ataması tamamlanmış</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-bold text-slate-700 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-                  Boşta Kalanlar
-                </td>
-                <td className="py-3 px-4 text-center font-extrabold text-rose-700 font-mono text-sm">
-                  {state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length}
-                </td>
-                <td className="py-3 px-4 text-center font-bold text-slate-600 font-mono text-sm">
-                  {state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").reduce((sum, a) => sum + a.weeklyHours, 0)}s
-                </td>
-                <td className="py-3 px-4 text-right">
-                  <button
-                    onClick={() => setShowUnassignedTable(!showUnassignedTable)}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition shadow-sm cursor-pointer ${
-                      showUnassignedTable 
-                        ? "bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200" 
-                        : "bg-rose-600 text-white hover:bg-rose-700 shadow-rose-200"
-                    }`}
-                  >
-                    {showUnassignedTable ? "Tabloyu Gizle" : "Atanmayan Boş Dersler"}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      {/* Üst Özet Tablosu (Tek Satır) */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+            📊 <span>Ders Atama Özeti:</span>
+          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              <span className="font-semibold text-slate-600">Toplam Ders:</span>
+              <span className="font-extrabold text-blue-700 font-mono text-sm">
+                {state.assignments.length}
+              </span>
+              <span className="text-slate-400 font-mono text-[10px]">
+                ({state.assignments.reduce((sum, a) => sum + a.weeklyHours, 0)} Saat)
+              </span>
+            </div>
+            <div className="hidden sm:block h-4 w-px bg-slate-200"></div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span className="font-semibold text-slate-600">Boşta Kalan:</span>
+              <span className="font-extrabold text-rose-700 font-mono text-sm">
+                {state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length}
+              </span>
+              <span className="text-slate-400 font-mono text-[10px]">
+                ({state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").reduce((sum, a) => sum + a.weeklyHours, 0)} Saat)
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Atanmayan Boş Dersler Tablosu (Expandable) */}
-        {showUnassignedTable && (
-          <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-slate-50/50 p-4 animate-fadeIn">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
-              <h4 className="text-xs font-black text-rose-800 uppercase flex items-center gap-1.5">
-                <span>⚠️ Henüz Öğretmen Atanmamış Boş Dersler ({state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length} Ders)</span>
-              </h4>
-              <p className="text-[10px] text-slate-500 font-medium hidden md:block">
-                Ders atamak için bir satıra tıklayarak ilgili derse ve sınıfa gidebilirsiniz.
-              </p>
-            </div>
-
-            {state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length === 0 ? (
-              <div className="text-center py-6 text-emerald-600 text-xs font-bold">
-                🎉 Harika! Tüm derslere öğretmen ataması yapılmış, boşta kalan ders yok.
-              </div>
-            ) : (
-              <div className="overflow-y-auto max-h-[250px] border border-slate-300 rounded-lg bg-white">
-                <table className="w-full text-xs text-left text-slate-700 border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 text-[10px] text-slate-600 uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
-                      <th className="py-2 px-3 font-bold border-r border-slate-200">SINIF ADI</th>
-                      <th className="py-2 px-3 font-bold border-r border-slate-200">DERS ADI (KOD)</th>
-                      <th className="py-2 px-3 font-bold text-center border-r border-slate-200 w-20">HDS</th>
-                      <th className="py-2 px-3 font-bold text-center w-28">İŞLEM</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-150">
-                    {state.assignments
-                      .filter(a => !a.teacherId || a.teacherId.trim() === "")
-                      .map((assignment) => {
-                        const c = classesMap.get(assignment.classId);
-                        const co = coursesMap.get(assignment.courseId);
-                        return (
-                          <tr
-                            key={assignment.id}
-                            onClick={() => {
-                              setAssignmentTabCourseId(assignment.courseId);
-                              showToast(`"${co?.name}" dersi ve "${c?.name}" sınıfı seçildi.`, "info");
-                            }}
-                            className="hover:bg-blue-50/60 cursor-pointer transition-colors group"
-                          >
-                            <td className="py-2 px-3 font-extrabold text-slate-800 border-r border-slate-200 group-hover:text-blue-700">
-                              {c?.name || "Bilinmeyen Sınıf"}
-                            </td>
-                            <td className="py-2 px-3 border-r border-slate-200">
-                              <span className="font-bold text-slate-700 group-hover:text-blue-700">{co?.name}</span>
-                              <span className="text-[10px] text-slate-400 font-mono font-medium ml-1.5">({co?.code})</span>
-                            </td>
-                            <td className="py-2 px-3 text-center font-bold text-slate-600 font-mono border-r border-slate-200">
-                              {assignment.weeklyHours} saat
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              <span className="text-[10px] text-blue-600 bg-blue-50 group-hover:bg-blue-100 group-hover:text-blue-800 font-bold px-2 py-0.5 rounded transition">
-                                Atama Yap ➔
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        <button
+          onClick={() => setShowUnassignedTable(!showUnassignedTable)}
+          className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition shadow-sm cursor-pointer shrink-0 ${
+            showUnassignedTable 
+              ? "bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200" 
+              : "bg-rose-600 text-white hover:bg-rose-700 shadow-rose-200"
+          }`}
+        >
+          {showUnassignedTable ? "Tabloyu Gizle" : "Atanmayan Boş Dersler"}
+        </button>
       </div>
 
-      {/* Main 3-Column Layout Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT COLUMN: ÖĞRETMENLER (Width: 4/12) */}
-        <div className="xl:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
-            <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-400" />
-              <span>1. Öğretmen Listesi</span>
-            </h3>
-            <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
-              {state.teachers.length} Kayıt
-            </span>
+      {/* Atanmayan Boş Dersler Tablosu (Expandable) */}
+      {showUnassignedTable && (
+        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-slate-50/50 p-3 animate-fadeIn">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-2">
+            <h4 className="text-xs font-black text-rose-800 uppercase flex items-center gap-1.5">
+              <span>⚠️ Henüz Öğretmen Atanmamış Boş Dersler ({state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length} Ders)</span>
+            </h4>
+            <p className="text-[10px] text-slate-500 font-medium hidden md:block">
+              Ders atamak için bir satıra tıklayarak ilgili derse ve sınıfa gidebilirsiniz.
+            </p>
           </div>
 
-          {/* Search Field */}
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-            <input
-              type="text"
-              placeholder="Öğretmen adı veya branş ara..."
-              value={teacherAssignTabSearch}
-              onChange={(e) => setTeacherAssignTabSearch(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm"
-            />
-          </div>
+          {state.assignments.filter(a => !a.teacherId || a.teacherId.trim() === "").length === 0 ? (
+            <div className="text-center py-6 text-emerald-600 text-xs font-bold">
+              🎉 Harika! Tüm derslere öğretmen ataması yapılmış, boşta kalan ders yok.
+            </div>
+          ) : (
+            <div className="overflow-y-auto max-h-[250px] border border-slate-300 rounded-lg bg-white">
+              <table className="w-full text-xs text-left text-slate-700 border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-[10px] text-slate-600 uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
+                    <th className="py-2 px-3 font-bold border-r border-slate-200">SINIF ADI</th>
+                    <th className="py-2 px-3 font-bold border-r border-slate-200">DERS ADI (KOD)</th>
+                    <th className="py-2 px-3 font-bold text-center border-r border-slate-200 w-20">HDS</th>
+                    <th className="py-2 px-3 font-bold text-center w-28">İŞLEM</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150">
+                  {state.assignments
+                    .filter(a => !a.teacherId || a.teacherId.trim() === "")
+                    .map((assignment) => {
+                      const c = classesMap.get(assignment.classId);
+                      const co = coursesMap.get(assignment.courseId);
+                      return (
+                        <tr
+                          key={assignment.id}
+                          onClick={() => {
+                            setAssignmentTabCourseId(assignment.courseId);
+                            showToast(`"${co?.name}" dersi ve "${c?.name}" sınıfı seçildi.`, "info");
+                          }}
+                          className="hover:bg-blue-50/60 cursor-pointer transition-colors group"
+                        >
+                          <td className="py-2 px-3 font-extrabold text-slate-800 border-r border-slate-200 group-hover:text-blue-700">
+                            {c?.name || "Bilinmeyen Sınıf"}
+                          </td>
+                          <td className="py-2 px-3 border-r border-slate-200">
+                            <span className="font-bold text-slate-700 group-hover:text-blue-700">{co?.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono font-medium ml-1.5">({co?.code})</span>
+                          </td>
+                          <td className="py-2 px-3 text-center font-bold text-slate-600 font-mono border-r border-slate-200">
+                            {assignment.weeklyHours} saat
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="text-[10px] text-blue-600 bg-blue-50 group-hover:bg-blue-100 group-hover:text-blue-800 font-bold px-2 py-0.5 rounded transition">
+                              Atama Yap ➔
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
-          {/* Teacher Table Container with Scroll */}
-          <div className="overflow-y-auto max-h-[340px] border border-slate-300 bg-white">
+    {/* Main 3-Column Layout Grid */}
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      
+      {/* LEFT COLUMN: ÖĞRETMENLER (Width: 4/12) */}
+      <div className="xl:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
+          <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-400" />
+            <span>1. Öğretmen Listesi</span>
+          </h3>
+          <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
+            {state.teachers.length} Kayıt
+          </span>
+        </div>
+
+        {/* Teacher Table Container with Scroll */}
+        <div className="overflow-y-auto max-h-[380px] border-b border-slate-200 bg-white">
             <table className="w-full text-xs text-left text-slate-700 border-collapse border border-slate-300">
               <thead>
                 <tr className="text-[10px] text-slate-700 uppercase tracking-wider bg-slate-100 sticky top-0 z-10">
@@ -429,19 +386,8 @@ export default function TeacherAssignmentsTab() {
             </span>
           </div>
 
-          {/* Search Field */}
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-            <input
-              type="text"
-              placeholder="Ders adı veya kodu ara..."
-              value={courseAssignTabSearch}
-              onChange={(e) => setCourseAssignTabSearch(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm"
-            />
-          </div>
-
           {/* Course Table Container with Scroll */}
-          <div className="overflow-y-auto max-h-[575px] border border-slate-300 bg-white">
+          <div className="overflow-y-auto max-h-[615px] border-b border-slate-200 bg-white">
             <table className="w-full text-xs text-left text-slate-700 border-collapse border border-slate-300">
               <thead>
                 <tr className="text-[10px] text-slate-700 uppercase tracking-wider bg-slate-100 sticky top-0 z-10">

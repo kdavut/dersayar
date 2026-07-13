@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from 'firebase/app-check';
 
 /**
  * Firebase configuration object.
@@ -34,6 +35,7 @@ export const isFirebaseConfigured = (): boolean => {
 let app;
 let db: Firestore | null = null;
 let auth: Auth | null = null;
+let appCheck: AppCheck | null = null;
 
 if (isFirebaseConfigured()) {
   try {
@@ -41,6 +43,29 @@ if (isFirebaseConfigured()) {
     db = getFirestore(app);
     auth = getAuth(app);
     console.log("Firebase initialized successfully.");
+
+    // Initialize Firebase App Check
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const isDev = (
+        hostname === 'localhost' || 
+        hostname === '127.0.0.1' || 
+        hostname.includes('run.app') || 
+        hostname.includes('webcontainer-api.io')
+      );
+
+      if (isDev) {
+        // Enable App Check Debug Token in local development or preview environments.
+        // The Firebase SDK will automatically use a Debug provider instead of reCAPTCHA.
+        (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      }
+
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider('6LfmCVItAAAAAOxwbkoo_cTFwNnxXfBEIayW1REu'),
+        isTokenAutoRefreshEnabled: true
+      });
+      console.log(`Firebase App Check initialized successfully (isDev: ${isDev}).`);
+    }
   } catch (error) {
     console.error("Firebase initialization failed:", error);
   }
@@ -51,4 +76,4 @@ if (isFirebaseConfigured()) {
   );
 }
 
-export { app, db, auth };
+export { app, db, auth, appCheck };

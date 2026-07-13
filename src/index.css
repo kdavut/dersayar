@@ -181,11 +181,27 @@
     margin-top: 10px !important;
   }
 
-  .print-table th {
+  /* Zebra striping for alternating table rows */
+  .print-table tbody tr:nth-child(even) td,
+  .print-carsaf-table tbody tr:nth-child(even) td {
     background-color: #f1f5f9 !important;
-    color: #000 !important;
-    border: 1.5px solid #000 !important;
+  }
+
+  /* Make row headers (teacher, class name columns) distinct */
+  .print-table tbody tr td:first-child,
+  .print-carsaf-table tbody tr td:first-child {
+    background-color: #e2e8f0 !important;
     font-weight: bold !important;
+    border-right: 2px solid #000 !important;
+  }
+
+  /* High contrast day and period column headers */
+  .print-table th,
+  .print-carsaf-table th {
+    background-color: #cbd5e1 !important;
+    color: #000 !important;
+    border: 2px solid #000 !important;
+    font-weight: 800 !important;
     font-size: 8.5px !important;
     padding: 3px 2px !important;
     text-align: center !important;
@@ -250,7 +266,7 @@
   }
 
   .print-carsaf-table th, .print-carsaf-table td {
-    border: 1px solid #000 !important;
+    border: 1.5px solid #000 !important;
     font-size: 8px !important;
     padding: 4px 2px !important;
     text-align: center !important;

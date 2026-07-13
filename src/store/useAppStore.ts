@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { AppState, FullHistoryState } from '../types';
 import { generateDemoState, createEmptyUnavailability } from '../utils/demoData';
 import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler, getDefaultMaxDepth } from '../utils/scheduler';
+import { db } from '../firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const LOCAL_STORAGE_KEY = "okul_ders_programi_state";
 
@@ -307,7 +309,7 @@ export const useAppStore = create<AppStore>((set) => ({
   undo: () => set((store) => {
     if (!store.user) {
       return {
-        toast: { message: "Geri alma işlemi sadece yönetici modunda geçerlidir.", type: "error" }
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
       };
     }
     const { historyState } = store;
@@ -338,7 +340,7 @@ export const useAppStore = create<AppStore>((set) => ({
   redo: () => set((store) => {
     if (!store.user) {
       return {
-        toast: { message: "Yineleme işlemi sadece yönetici modunda geçerlidir.", type: "error" }
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
       };
     }
     const { historyState } = store;
@@ -378,7 +380,6 @@ export const useAppStore = create<AppStore>((set) => ({
     }
 
     try {
-      const { db } = await import("../firebase");
       if (!db) {
         set({
           toast: { message: "Bulut veritabanı bağlantısı kurulamadı.", type: "error" }
@@ -386,7 +387,6 @@ export const useAppStore = create<AppStore>((set) => ({
         return;
       }
 
-      const { doc, getDoc, setDoc, serverTimestamp } = await import("firebase/firestore");
       const scheduleRef = doc(db, "schedules", user.uid);
       const docSnap = await getDoc(scheduleRef);
 
@@ -456,10 +456,8 @@ export const useAppStore = create<AppStore>((set) => ({
     if (!user) return;
 
     try {
-      const { db } = await import("../firebase");
       if (!db) return;
 
-      const { doc, getDoc } = await import("firebase/firestore");
       const scheduleRef = doc(db, "schedules", user.uid);
       const docSnap = await getDoc(scheduleRef);
 
@@ -497,14 +495,35 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setToast: (toast) => set({ toast }),
   
-  showToast: (message, type) => set({ toast: { message, type } }),
+  showToast: (message, type) => set((store) => {
+    if (!store.user) {
+      const allowedMessages = [
+        "Tüm veriler başarıyla indirildi.",
+        "Yedek başarıyla yüklendi",
+        "Geçersiz yedek",
+        "Dosya okunurken",
+        "Misafir modundan çıkış",
+        "Güvenli çıkış",
+        "Giriş yapıldı",
+        "oturum"
+      ];
+      const isAllowed = allowedMessages.some(m => message.toLowerCase().includes(m.toLowerCase()));
+      if (type === "success" && !isAllowed) {
+        return {};
+      }
+      if (type === "info" && !isAllowed) {
+        return {};
+      }
+    }
+    return { toast: { message, type } };
+  }),
 
   setConfirmModal: (confirmModal) => set({ confirmModal }),
 
   handleClearAllData: () => set((store) => {
     if (!store.user) {
       return {
-        toast: { message: "Tüm verileri temizleme işlemi sadece yönetici modunda geçerlidir.", type: "error" }
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
       };
     }
     const setConfirmModal = (modal: any) => set({ confirmModal: modal });
@@ -565,6 +584,11 @@ export const useAppStore = create<AppStore>((set) => ({
   }),
 
   handleClearConstraints: () => set((store) => {
+    if (!store.user) {
+      return {
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
+      };
+    }
     const setConfirmModal = (modal: any) => set({ confirmModal: modal });
     const updateState = store.updateState;
     const showToast = store.showToast;
@@ -599,6 +623,11 @@ export const useAppStore = create<AppStore>((set) => ({
   }),
 
   handleClearManualLocks: () => set((store) => {
+    if (!store.user) {
+      return {
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
+      };
+    }
     const setConfirmModal = (modal: any) => set({ confirmModal: modal });
     const updateState = store.updateState;
     const showToast = store.showToast;
@@ -636,6 +665,11 @@ export const useAppStore = create<AppStore>((set) => ({
   }),
 
   handleClearAllTeachersSchedule: () => set((store) => {
+    if (!store.user) {
+      return {
+        toast: { message: "Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", type: "error" }
+      };
+    }
     const setConfirmModal = (modal: any) => set({ confirmModal: modal });
     const updateState = store.updateState;
     const showToast = store.showToast;
@@ -650,10 +684,10 @@ export const useAppStore = create<AppStore>((set) => ({
           updateState((draft) => {
             draft.schedule = {};
             for (const c of draft.classes) {
-              draft.schedule[c.id] = {};
-              for (let d = 0; d < draft.settings.days.length; d++) {
-                draft.schedule[c.id][d] = Array(draft.settings.periodsPerDay).fill(null);
-              }
+               draft.schedule[c.id] = {};
+               for (let d = 0; d < draft.settings.days.length; d++) {
+                 draft.schedule[c.id][d] = Array(draft.settings.periodsPerDay).fill(null);
+               }
             }
           });
           setConfirmModal(null);
@@ -908,6 +942,10 @@ export const useAppStore = create<AppStore>((set) => ({
 
   runAutomaticScheduler: async (keepExisting, targets) => {
     const store = useAppStore.getState();
+    if (!store.user) {
+      store.showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     
     // Determine target teacher or class names early
     let targetTeacherName = "";
@@ -1063,6 +1101,10 @@ export const useAppStore = create<AppStore>((set) => ({
 
   handleAutoGenerateClick: () => {
     const store = useAppStore.getState();
+    if (!store.user) {
+      store.showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const state = store.historyState.current;
     
     if (state.assignments.length === 0) {
@@ -1093,6 +1135,10 @@ export const useAppStore = create<AppStore>((set) => ({
 
   handleScheduleSelectedTeacher: () => {
     const store = useAppStore.getState();
+    if (!store.user) {
+      store.showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const { viewingEntityId, scheduleViewMode } = store;
     
     if (!viewingEntityId || scheduleViewMode !== "teacher") {
@@ -1104,6 +1150,10 @@ export const useAppStore = create<AppStore>((set) => ({
 
   handleScheduleAllTeachers: () => {
     const store = useAppStore.getState();
+    if (!store.user) {
+      store.showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const state = store.historyState.current;
     const tIds = state.teachers.map((t) => t.id);
     

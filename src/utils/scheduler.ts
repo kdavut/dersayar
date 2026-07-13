@@ -349,6 +349,11 @@ export function isPlacementValidEx(
       if (tempSchedule[assignment.classId]?.[dayIndex]?.[p] !== null) {
         return false;
       }
+    } else {
+      const existingSlot = tempSchedule[assignment.classId]?.[dayIndex]?.[p];
+      if (existingSlot && existingSlot.isLocked === true) {
+        return false;
+      }
     }
 
     if (assignment.teacherId) {
@@ -946,19 +951,56 @@ export function generateAutomaticSchedule(state: AppState): {
     }
   }
 
+  const coursesMap = new Map<string, Course>(state.courses.map((co) => [co.id, co]));
+
   const blocksToPlace: BlockToPlace[] = [];
   assignments.forEach((assign) => {
     let remainingHours = assign.weeklyHours;
-    const prefBlock = assign.preferredBlockSize || 2;
     let blockCounter = 0;
-    while (remainingHours > 0) {
-      const size = Math.min(prefBlock, remainingHours);
-      blocksToPlace.push({
-        assignment: assign,
-        size: size,
-        id: `${assign.id}-b${blockCounter++}`
-      });
-      remainingHours -= size;
+
+    let parts: number[] = [];
+    if (assign.customPlacementMode) {
+      parts = assign.customPlacementMode.split("+").map((p: string) => parseInt(p.trim(), 10)).filter((p: number) => !isNaN(p) && p > 0);
+    } else {
+      const course = coursesMap.get(assign.courseId);
+      if (course && course.placementMode) {
+        parts = course.placementMode.split("+").map((p: string) => parseInt(p.trim(), 10)).filter((p: number) => !isNaN(p) && p > 0);
+      }
+    }
+
+    if (parts.length > 0) {
+      let tempRemaining = remainingHours;
+      for (const partSize of parts) {
+        if (tempRemaining <= 0) break;
+        const size = Math.min(partSize, tempRemaining);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        tempRemaining -= size;
+      }
+      const prefBlock = assign.preferredBlockSize || 2;
+      while (tempRemaining > 0) {
+        const size = Math.min(prefBlock, tempRemaining);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        tempRemaining -= size;
+      }
+    } else {
+      const prefBlock = assign.preferredBlockSize || 2;
+      while (remainingHours > 0) {
+        const size = Math.min(prefBlock, remainingHours);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        remainingHours -= size;
+      }
     }
   });
 
@@ -1075,22 +1117,58 @@ export function generatePartialSchedule(
     }
   }
 
+  const coursesMap = new Map<string, Course>(state.courses.map((co) => [co.id, co]));
+
   const blocksToPlace: BlockToPlace[] = [];
   targetsFilter.forEach((assign) => {
     const placedCount = scheduledHoursCount[assign.id] || 0;
     let remainingHours = assign.weeklyHours - placedCount;
     if (remainingHours < 0) remainingHours = 0;
-    const prefBlock = assign.preferredBlockSize || 2;
     let blockCounter = 0;
 
-    while (remainingHours > 0) {
-      const size = Math.min(prefBlock, remainingHours);
-      blocksToPlace.push({
-        assignment: assign,
-        size: size,
-        id: `${assign.id}-b${blockCounter++}`
-      });
-      remainingHours -= size;
+    let parts: number[] = [];
+    if (assign.customPlacementMode) {
+      parts = assign.customPlacementMode.split("+").map((p: string) => parseInt(p.trim(), 10)).filter((p: number) => !isNaN(p) && p > 0);
+    } else {
+      const course = coursesMap.get(assign.courseId);
+      if (course && course.placementMode) {
+        parts = course.placementMode.split("+").map((p: string) => parseInt(p.trim(), 10)).filter((p: number) => !isNaN(p) && p > 0);
+      }
+    }
+
+    if (parts.length > 0) {
+      let tempRemaining = remainingHours;
+      for (const partSize of parts) {
+        if (tempRemaining <= 0) break;
+        const size = Math.min(partSize, tempRemaining);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        tempRemaining -= size;
+      }
+      const prefBlock = assign.preferredBlockSize || 2;
+      while (tempRemaining > 0) {
+        const size = Math.min(prefBlock, tempRemaining);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        tempRemaining -= size;
+      }
+    } else {
+      const prefBlock = assign.preferredBlockSize || 2;
+      while (remainingHours > 0) {
+        const size = Math.min(prefBlock, remainingHours);
+        blocksToPlace.push({
+          assignment: assign,
+          size: size,
+          id: `${assign.id}-b${blockCounter++}`
+        });
+        remainingHours -= size;
+      }
     }
   });
 

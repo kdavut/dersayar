@@ -2440,12 +2440,12 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                 onClick={handleScheduleSelectedTeacher}
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                               >
-                                Öğretmen Yerleştir
+                                Öğretmeni Yerleştir (önerilir)
                               </button>
                             )}
                             <button
                               onClick={handleAutoGenerateClick}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                             >
                               Hepsini Yerleştir
                             </button>
@@ -3232,7 +3232,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           return (
                             <div className="flex flex-col h-full overflow-hidden gap-4">
                               {/* SECTION 1: Atölyeye Atanmış Dersler (Ders Planlama) */}
-                              <div className="flex flex-col shrink-0">
+                              <div className="flex flex-col h-full overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
                                   <div className="flex items-center gap-2">
                                     <h4 className="text-xs font-black text-amber-800 uppercase flex items-center gap-1.5">
@@ -3249,10 +3249,10 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                     {classroomAssignments.length} Atama
                                   </span>
                                 </div>
-                                <div className="overflow-y-auto max-h-[180px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin font-semibold">
+                                <div className="overflow-y-auto max-h-[350px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin font-semibold">
                                   {classroomAssignments.length === 0 ? (
                                     <div className="text-center py-6 text-slate-400 text-xs italic">
-                                      Atölyeye tanımlanmış planlanabilir ders bulunmuyor.
+                                      Atölye tanımlanmış planlanabilir ders bulunmuyor.
                                     </div>
                                   ) : (
                                     <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
@@ -3314,49 +3314,6 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                             </tr>
                                           );
                                         })}
-                                      </tbody>
-                                    </table>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* SECTION 2: Doluluk Detayları */}
-                              <div className="flex flex-col overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 shrink-0">
-                                  <h4 className="text-xs font-black text-slate-700 uppercase flex items-center gap-1.5">
-                                    <span>📅 Atölye Doluluk Çizelgesi</span>
-                                  </h4>
-                                  <span className="text-[10px] bg-slate-50 text-slate-600 font-extrabold px-2 py-0.5 rounded border border-slate-100">
-                                    {classroomPlacements.length} Saat Dolu
-                                  </span>
-                                </div>
-
-                                <div className="overflow-y-auto max-h-[160px] bg-white border border-slate-200 rounded-xl mt-1 scrollbar-thin">
-                                  {classroomPlacements.length === 0 ? (
-                                    <div className="text-center py-6 text-slate-400 text-xs italic">
-                                      Atölyede henüz yerleştirilmiş ders bulunmuyor.
-                                    </div>
-                                  ) : (
-                                    <table className="w-full text-left text-[11px] text-slate-700 border-collapse">
-                                      <thead>
-                                        <tr className="bg-slate-100 text-[10px] text-slate-700 font-extrabold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200">
-                                          <th className="py-1 px-2 border border-slate-200">Sınıf - Ders (Sorumlu)</th>
-                                          <th className="py-1 px-2 text-center w-28 border border-slate-200">Zaman</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {classroomPlacements.map((p, idx) => (
-                                          <tr key={idx} className="hover:bg-slate-50/50 border-b border-slate-200/60">
-                                            <td className="py-1 px-2 border border-slate-200 text-slate-700">
-                                              <span className="font-semibold">{p.className}</span> - {p.courseName} <span className="text-[10px] text-slate-400">({p.teacherName})</span>
-                                            </td>
-                                            <td className="py-1 px-2 text-center border border-slate-200 bg-slate-50/50">
-                                              <span className="text-[10px] font-medium text-slate-600">
-                                                {state.settings.days[p.dayIdx].substring(0, 3)} - {p.periodIdx + 1}. Ders
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
                                       </tbody>
                                     </table>
                                   )}

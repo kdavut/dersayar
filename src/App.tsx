@@ -208,6 +208,19 @@ export default function App() {
 
   const { current: state, isSynced } = historyState;
   const [isGuestMode, setIsGuestMode] = useState(false);
+  const [showGuestBanner, setShowGuestBanner] = useState(true);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth) {
@@ -928,6 +941,10 @@ export default function App() {
   // --- GAP REDUCTION & OPTIMIZATION UTILITIES (DELEGATED TO UTILS) ---
 
   const optimizeGapsForTeacher = (teacherId: string) => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const res = runOptimizeGapsForTeacher(state, teacherId);
     if (res.success && res.schedule) {
       updateState((draft) => {
@@ -940,6 +957,10 @@ export default function App() {
   };
 
   const optimizeGapsForAllTeachers = () => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const res = runOptimizeGapsForAllTeachers(state);
     if (res.success && res.schedule) {
       updateState((draft) => {
@@ -952,6 +973,10 @@ export default function App() {
   };
 
   const removeSingleLessonDays = () => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const res = runRemoveSingleLessonDays(state);
     if (res.success && res.schedule) {
       updateState((draft) => {
@@ -964,6 +989,10 @@ export default function App() {
   };
 
   const removeSingleLessonDaysForTeacher = (teacherId: string) => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     const res = runRemoveSingleLessonDaysForTeacher(state, teacherId);
     if (res.success && res.schedule) {
       updateState((draft) => {
@@ -976,10 +1005,18 @@ export default function App() {
   };
 
   const handleAutoGenerate = () => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     handleAutoGenerateClick();
   };
 
   const handleClearTeacherLessons = (teacherId: string) => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     updateState((draft) => {
       for (const c of draft.classes) {
         if (!draft.schedule[c.id]) continue;
@@ -1000,6 +1037,10 @@ export default function App() {
   };
 
   const handleClearAllTeachersSchedule = () => {
+    if (!user) {
+      showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
+      return;
+    }
     setConfirmModal({
       isOpen: true,
       title: "Tüm Programı Temizle",
@@ -2083,6 +2124,7 @@ export default function App() {
         }}
         onContinueAsGuest={() => {
           setIsGuestMode(true);
+          setShowGuestBanner(true);
         }}
       />
     );
@@ -2094,11 +2136,11 @@ export default function App() {
       {/* -------------------------------------------------------------
           1. HEADER (CONTROL BAR)
          ------------------------------------------------------------- */}
-      <header className="h-20 bg-[#0F172A] border-b border-slate-800/40 px-6 flex items-center justify-between shadow-md shrink-0 z-10">
-        <div className="flex items-center space-x-3 select-none">
+      <header className="h-14 bg-[#0F172A] border-b border-slate-800/40 px-3 flex items-center justify-between shadow-md shrink-0 z-10">
+        <div className="flex items-center space-x-2 select-none">
           {/* Beautiful and professional scheduler/timetable icon */}
-          <div className="p-2 bg-gradient-to-tr from-blue-700 to-indigo-500 rounded-xl shadow-md shadow-blue-950/30 flex items-center justify-center shrink-0">
-            <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="p-1.5 bg-gradient-to-tr from-blue-700 to-indigo-500 rounded-lg shadow-md shadow-blue-950/30 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M8 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -2113,54 +2155,51 @@ export default function App() {
           </div>
           
           {/* Brand Name */}
-          <div className="flex items-center text-2xl tracking-tight">
+          <div className="flex items-center text-lg tracking-tight">
             <span className="font-light text-white">Der</span>
             <span className="font-bold text-[#3B82F6]">Sayar</span>
           </div>
           
-          <div className="h-8 w-px bg-slate-800/80 mx-2"></div>
+          <div className="h-6 w-px bg-slate-800/80 mx-1.5"></div>
           
           {/* Active School Block with Subtitle */}
           <div className="flex flex-col justify-center">
-            <span className="text-[10px] font-extrabold text-[#3B82F6] uppercase tracking-widest block leading-none">AKTİF OKUL</span>
-            <span className="text-sm font-extrabold text-white uppercase tracking-tight mt-0.5 leading-none">
+            <span className="text-[9px] font-extrabold text-[#3B82F6] uppercase tracking-widest block leading-none">AKTİF OKUL</span>
+            <span className="text-xs font-bold text-white uppercase tracking-tight mt-0.5 leading-none">
               {state.settings.schoolName || "YENİ OKUL"}
-            </span>
-            <span className="text-[10.5px] font-medium text-slate-400 tracking-wide mt-0.5 leading-none">
-              Okul Ders Yönetim Paneli
             </span>
           </div>
         </div>
 
         {/* Right side controls: Undo, Redo, Sync statuses */}
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-3">
           
           {/* Geri Al / Yenile (Undo/Redo) */}
-          <div className="flex items-center bg-slate-900/50 p-1 rounded-lg border border-slate-700/60 shadow-sm">
+          <div className="flex items-center bg-slate-900/50 p-0.5 rounded-lg border border-slate-700/60 shadow-sm">
             <button
               onClick={undo}
               disabled={historyState.past.length === 0}
               title="Geri Al"
-              className={`p-2 rounded-md transition-all ${
+              className={`p-1.5 rounded transition-all ${
                 historyState.past.length > 0
                   ? "text-white hover:bg-slate-800 hover:text-cyan-400 hover:shadow-sm cursor-pointer"
                   : "text-slate-600 cursor-not-allowed"
               }`}
             >
-              <Undo2 className="w-4 h-4" />
+              <Undo2 className="w-3.5 h-3.5" />
             </button>
-            <div className="h-5 w-px bg-slate-700/60 mx-1"></div>
+            <div className="h-4 w-px bg-slate-700/60 mx-1"></div>
             <button
               onClick={redo}
               disabled={historyState.future.length === 0}
               title="Yenile (İleri Al)"
-              className={`p-2 rounded-md transition-all ${
+              className={`p-1.5 rounded transition-all ${
                 historyState.future.length > 0
                   ? "text-white hover:bg-slate-800 hover:text-cyan-400 hover:shadow-sm cursor-pointer"
                   : "text-slate-600 cursor-not-allowed"
               }`}
             >
-              <Redo2 className="w-4 h-4" />
+              <Redo2 className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -2168,34 +2207,30 @@ export default function App() {
           <div className="flex flex-col items-end">
             {!isSynced ? (
               <>
-                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest leading-none mb-1">
-                  buluta kaydedilmemiş veriler var
-                </span>
                 <button
                   onClick={saveToCloud}
-                  className="flex items-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg shadow-rose-950/40 ring-2 ring-rose-400/50 ring-offset-2 ring-offset-[#0B1B3D] transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-lg shadow-rose-950/40 ring-1 ring-rose-400/50 transition-all cursor-pointer"
                 >
-                  <div className="w-2 h-2 bg-white rounded-full animate-ping shrink-0"></div>
-                  <span>BULUTA KAYDET</span>
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping shrink-0"></div>
+                  <span>KAYDET</span>
                 </button>
               </>
             ) : (
-              <div className="flex items-center gap-2 bg-emerald-950/40 text-emerald-300 border border-emerald-800/60 px-4 py-2 rounded-full text-xs font-bold shadow-sm">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full shrink-0 animate-pulse"></div>
-                <span>Bulutla Senkronize</span>
+              <div className="flex items-center gap-1.5 bg-emerald-950/40 text-emerald-300 border border-emerald-800/60 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0 animate-pulse"></div>
+                <span>Senkronize</span>
               </div>
             )}
           </div>
 
           {/* User Profile info */}
           {user && (
-            <div className="flex items-center gap-2 border-r border-slate-800 pr-4 mr-1">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white shadow-md">
+            <div className="flex items-center gap-1.5 border-r border-slate-800 pr-3 mr-0.5">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-[10px] font-bold text-white shadow-md">
                 {user.email?.substring(0, 2).toUpperCase() || "DS"}
               </div>
               <div className="hidden md:flex flex-col text-left">
-                <span className="text-[11px] font-bold text-white leading-tight">Yönetici</span>
-                <span className="text-[10px] text-slate-400 font-mono leading-none">{user.email}</span>
+                <span className="text-[10px] font-bold text-white leading-tight">Yönetici</span>
               </div>
             </div>
           )}
@@ -2227,35 +2262,75 @@ export default function App() {
                 }
               }
             }}
-            className="flex items-center space-x-2 text-rose-300 hover:text-white hover:bg-rose-950/40 hover:border-rose-800 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 text-rose-300 hover:text-white hover:bg-rose-950/40 hover:border-rose-800 border border-slate-700 px-2.5 py-1 rounded-xl text-[10px] font-bold transition shadow-sm cursor-pointer"
             title="Sistemden Güvenli Çıkış"
           >
             {isSavingAndExiting ? (
-              <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
+              <div className="w-3 h-3 border-2 border-rose-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
             ) : (
               <LogOut className="w-3.5 h-3.5 shrink-0 text-rose-400" />
             )}
-            <span>{isSavingAndExiting ? "Çıkış Yapılıyor..." : "Güvenli Çıkış"}</span>
+            <span>{isSavingAndExiting ? "Çıkış..." : "Çıkış"}</span>
           </button>
         </div>
       </header>
 
-      {isGuestMode && (
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 px-6 py-2.5 flex items-center justify-between text-white shadow-md shrink-0 z-20 text-xs font-semibold select-none">
+      {isGuestMode && showGuestBanner && (
+        <div className="relative bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 px-4 pr-10 py-1.5 flex flex-wrap items-center justify-between gap-2 text-white shadow-md shrink-0 z-20 text-[11px] font-semibold select-none">
           <div className="flex items-center space-x-2">
             <span className="text-sm">⚠️</span>
             <span>
               <strong>Görüntüleme Modu (Salt Okunur):</strong> Programı yerel hafızadan görüntülüyorsunuz. Programda düzenleme yapmak, kaydetmek ve tüm özellikleri kullanabilmek için lütfen Yönetici Girişi yapın.
             </span>
           </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="file"
+              id="guest-import-backup"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportBackup}
+            />
+            <button
+              onClick={() => document.getElementById("guest-import-backup")?.click()}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg text-[10px] font-bold transition-all duration-150 cursor-pointer shadow-sm"
+              title="Yedek Yükle"
+            >
+              Bu Modda daha önce bilgisayara yüklediğiniz yedeği çekebilir ve programınıza kayıt olmadan bakabilirsiniz. Bunun için tıklayınız
+            </button>
+            <button
+              onClick={async () => {
+                if (deferredPrompt) {
+                  deferredPrompt.prompt();
+                  const { outcome } = await deferredPrompt.userChoice;
+                  if (outcome === "accepted") {
+                    setDeferredPrompt(null);
+                  }
+                } else {
+                  showToast("Uygulamayı bilgisayarınıza veya telefonunuza indirmek (PWA) için tarayıcınızın adres çubuğundaki 'Yükle' (Ekran simgesi veya artı simgesi) butonunu kullanabilirsiniz. Bu işlem uygulamayı internet bağlantısı olmadan (çevrimdışı) açıp kullanmanızı sağlar.", "info");
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg text-[10px] font-bold transition-all duration-150 cursor-pointer shadow-sm flex items-center space-x-1"
+              title="Uygulamayı Çevrimdışı Kullanmak İçin Cihaza İndir / Yükle"
+            >
+              <span>📥 UYGULAMAYI İNDİR (ÇEVRİMDIŞI)</span>
+            </button>
+            <button
+              onClick={() => {
+                setIsGuestMode(false);
+                setUser(null);
+              }}
+              className="bg-white hover:bg-slate-100 text-orange-600 px-3 py-1 rounded-lg text-[10px] font-extrabold transition-all duration-150 cursor-pointer shadow-sm hover:scale-[1.02]"
+            >
+              YÖNETİCİ GİRİŞİ YAP
+            </button>
+          </div>
           <button
-            onClick={() => {
-              setIsGuestMode(false);
-              setUser(null);
-            }}
-            className="bg-white hover:bg-slate-100 text-orange-600 px-3.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all duration-150 cursor-pointer shadow-sm hover:scale-[1.02]"
+            onClick={() => setShowGuestBanner(false)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-amber-200 transition font-black text-sm cursor-pointer p-1"
+            title="Kapat"
           >
-            YÖNETİCİ GİRİŞİ YAP
+            ✕
           </button>
         </div>
       )}
@@ -2484,7 +2559,7 @@ export default function App() {
           </AnimatePresence>
 
           {/* Render Active View Container */}
-          <div id="active-tab-container" className="flex-1 flex flex-col min-h-0 p-6 overflow-y-auto">
+          <div id="active-tab-container" className="flex-1 flex flex-col min-h-0 p-1.5 overflow-y-auto">
             
             {/* -------------------------------------------------------------
                 BACKUP & DELETE TAB (YEDEKLE VE SİL SEKMESİ)
