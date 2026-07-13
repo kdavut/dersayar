@@ -56,8 +56,9 @@ if (isFirebaseConfigured()) {
 
       if (isDev) {
         // Enable App Check Debug Token in local development or preview environments.
-        // The Firebase SDK will automatically use a Debug provider instead of reCAPTCHA.
-        (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        // We use a stable debug token so you only need to register it once in your Firebase Console.
+        const debugToken = (import.meta as any).env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || "2be4d4a6-2e2e-4115-8e78-1cace105529e";
+        (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === "true" ? true : debugToken;
       }
 
       appCheck = initializeAppCheck(app, {
