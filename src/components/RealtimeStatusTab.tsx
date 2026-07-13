@@ -212,42 +212,47 @@ export default function RealtimeStatusTab() {
 
       {/* Symmetrical 3x2 Grid */}
       <div className="flex-1 overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 animate-fade-in pb-4">
           
-          {/* Card 1: Şuan Derste Olanlar */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
+          {/* Card 1: Şuan Derste Olanlar (Pastel Blue / Sky) */}
+          <div className="bg-sky-50/90 border border-sky-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-sky-50/100">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5 shrink-0">
-                <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block animate-pulse"></span>
+              <div className="flex items-center justify-between border-b border-sky-200/60 pb-2 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-sky-950 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block animate-ping"></span>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                  </span>
                   Dersteki Öğretmenler
                 </h3>
-                <span className="bg-blue-50 text-blue-600 font-bold text-[9px] px-1.5 py-0.2 rounded">
-                  {currentlyTeaching.length}
+                <span className="bg-sky-200/80 text-sky-900 border border-sky-300/50 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                  {currentlyTeaching.length} Öğretmen
                 </span>
               </div>
-
+ 
               <div className="flex-1 overflow-hidden">
                 {currentlyTeaching.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-2">
-                    <span className="text-lg mb-1">💤</span>
-                    <p className="text-[10px] text-slate-400 font-semibold">Bu periyotta aktif ders bulunmamaktadır.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <span className="text-2xl mb-1.5">💤</span>
+                    <p className="text-xs text-sky-850/70 font-bold">Bu periyotta aktif ders bulunmamaktadır.</p>
                   </div>
                 ) : (
-                  <div className="overflow-y-auto h-full pr-0.5">
-                    <table className="w-full text-[11px] text-left text-slate-700 border-collapse border border-slate-200">
+                  <div className="overflow-y-auto h-full pr-1">
+                    <table className="w-full text-xs text-left text-sky-950 border-collapse border border-sky-200/60 bg-white/70 rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
-                          <th className="py-0.5 px-1.5 border border-slate-200">Öğretmen</th>
-                          <th className="py-0.5 px-1.5 border border-slate-200 text-right">Sınıf (Ders)</th>
+                        <tr className="bg-sky-100 text-[10px] font-black text-sky-900 uppercase tracking-wider sticky top-0 z-10 border-b border-sky-200/60">
+                          <th className="py-2 px-2.5 border-r border-sky-200/60">Öğretmen</th>
+                          <th className="py-2 px-2.5 text-right">Sınıf (Ders)</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-sky-100">
                         {currentlyTeaching.map(({ teacher, classNames, courseNames }) => (
-                          <tr key={teacher.id} className="hover:bg-slate-50/50 transition h-6">
-                            <td className="py-0.5 px-1.5 font-bold text-slate-800 border border-slate-150 truncate max-w-[110px]">{teacher.name}</td>
-                            <td className="py-0.5 px-1.5 text-right font-bold text-blue-600 border border-slate-150">
-                              {classNames} <span className="text-slate-400 text-[9px] font-semibold">({courseNames})</span>
+                          <tr key={teacher.id} className="hover:bg-sky-100/30 transition-colors">
+                            <td className="py-2 px-2.5 font-bold text-sky-950 truncate max-w-[120px]">{teacher.name}</td>
+                            <td className="py-2 px-2.5 text-right font-extrabold text-sky-850">
+                              <span className="bg-sky-100 text-sky-900 px-1.5 py-0.5 rounded text-[10px] mr-1">{classNames}</span>
+                              <span className="text-sky-700/80 text-[10px] font-bold">({courseNames})</span>
                             </td>
                           </tr>
                         ))}
@@ -258,41 +263,43 @@ export default function RealtimeStatusTab() {
               </div>
             </div>
           </div>
-
-          {/* Card 2: Ders Arasında Olanlar */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
+ 
+          {/* Card 2: Ders Arasında Olanlar (Pastel Amber / Peach) */}
+          <div className="bg-amber-50/90 border border-amber-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-amber-50/100">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5 shrink-0">
-                <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-2 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
                   Ders Arasında Olanlar
                 </h3>
-                <span className="bg-amber-50 text-amber-600 font-bold text-[9px] px-1.5 py-0.2 rounded">
-                  {breakTime.length}
+                <span className="bg-amber-200/80 text-amber-900 border border-amber-300/50 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                  {breakTime.length} Öğretmen
                 </span>
               </div>
-
+ 
               <div className="flex-1 overflow-hidden">
                 {breakTime.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-2">
-                    <span className="text-lg mb-1">☕</span>
-                    <p className="text-[10px] text-slate-400 font-semibold">Ders arasında dinlenen öğretmen bulunmuyor.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <span className="text-2xl mb-1.5">☕</span>
+                    <p className="text-xs text-amber-850/70 font-bold">Ders arasında dinlenen öğretmen bulunmuyor.</p>
                   </div>
                 ) : (
-                  <div className="overflow-y-auto h-full pr-0.5">
-                    <table className="w-full text-[11px] text-left text-slate-700 border-collapse border border-slate-200">
+                  <div className="overflow-y-auto h-full pr-1">
+                    <table className="w-full text-xs text-left text-amber-950 border-collapse border border-amber-200/60 bg-white/70 rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
-                          <th className="py-0.5 px-1.5 border border-slate-200">Öğretmen</th>
-                          <th className="py-0.5 px-1.5 border border-slate-200 text-right">Ders Dağılımı (Bugün)</th>
+                        <tr className="bg-amber-100 text-[10px] font-black text-amber-900 uppercase tracking-wider sticky top-0 z-10 border-b border-amber-200/60">
+                          <th className="py-2 px-2.5 border-r border-amber-200/60">Öğretmen</th>
+                          <th className="py-2 px-2.5 text-right">Ders Dağılımı (Bugün)</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-amber-100">
                         {breakTime.map(({ teacher, completedCount, remainingCount }) => (
-                          <tr key={teacher.id} className="hover:bg-slate-50/50 transition h-6">
-                            <td className="py-0.5 px-1.5 font-bold text-slate-800 border border-slate-150 truncate max-w-[110px]">{teacher.name}</td>
-                            <td className="py-0.5 px-1.5 text-right font-bold text-amber-600 border border-slate-150">
-                              Biten: {completedCount} / Kalan: {remainingCount}
+                          <tr key={teacher.id} className="hover:bg-amber-100/30 transition-colors">
+                            <td className="py-2 px-2.5 font-bold text-amber-950 truncate max-w-[120px]">{teacher.name}</td>
+                            <td className="py-2 px-2.5 text-right font-extrabold text-amber-800">
+                              <span className="text-xs text-amber-900">Biten: {completedCount}</span>
+                              <span className="mx-1 text-amber-400">|</span>
+                              <span className="text-xs text-amber-700">Kalan: {remainingCount}</span>
                             </td>
                           </tr>
                         ))}
@@ -303,42 +310,42 @@ export default function RealtimeStatusTab() {
               </div>
             </div>
           </div>
-
-          {/* Card 3: Günlük Dersleri Henüz Başlamayanlar */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
+ 
+          {/* Card 3: Günlük Dersleri Henüz Başlamayanlar (Pastel Indigo / Lilac) */}
+          <div className="bg-indigo-50/90 border border-indigo-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-indigo-50/100">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5 shrink-0">
-                <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block"></span>
+              <div className="flex items-center justify-between border-b border-indigo-200/60 pb-2 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
                   Henüz Başlamamış
                 </h3>
-                <span className="bg-indigo-50 text-indigo-600 font-bold text-[9px] px-1.5 py-0.2 rounded">
-                  {notStarted.length}
+                <span className="bg-indigo-200/80 text-indigo-900 border border-indigo-300/50 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                  {notStarted.length} Öğretmen
                 </span>
               </div>
-
+ 
               <div className="flex-1 overflow-hidden">
                 {notStarted.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-2">
-                    <span className="text-lg mb-1">📋</span>
-                    <p className="text-[10px] text-slate-400 font-semibold">Tüm öğretmenlerin dersleri başlamış durumda.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <span className="text-2xl mb-1.5">📋</span>
+                    <p className="text-xs text-indigo-850/70 font-bold">Tüm öğretmenlerin dersleri başlamış durumda.</p>
                   </div>
                 ) : (
-                  <div className="overflow-y-auto h-full pr-0.5">
-                    <table className="w-full text-[11px] text-left text-slate-700 border-collapse border border-slate-200">
+                  <div className="overflow-y-auto h-full pr-1">
+                    <table className="w-full text-xs text-left text-indigo-950 border-collapse border border-indigo-200/60 bg-white/70 rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
-                          <th className="py-0.5 px-1.5 border border-slate-200">Öğretmen</th>
-                          <th className="py-0.5 px-1.5 border border-slate-200 text-right">İlk Ders Saati</th>
+                        <tr className="bg-indigo-100 text-[10px] font-black text-indigo-900 uppercase tracking-wider sticky top-0 z-10 border-b border-indigo-200/60">
+                          <th className="py-2 px-2.5 border-r border-indigo-200/60">Öğretmen</th>
+                          <th className="py-2 px-2.5 text-right">İlk Ders Saati</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-indigo-100">
                         {notStarted.map(({ teacher, firstPeriod }) => {
                           const time = times[firstPeriod];
                           return (
-                            <tr key={teacher.id} className="hover:bg-slate-50/50 transition h-6">
-                              <td className="py-0.5 px-1.5 font-bold text-slate-800 border border-slate-150 truncate max-w-[110px]">{teacher.name}</td>
-                              <td className="py-0.5 px-1.5 text-right font-bold text-indigo-600 border border-slate-150">
+                            <tr key={teacher.id} className="hover:bg-indigo-100/30 transition-colors">
+                              <td className="py-2 px-2.5 font-bold text-indigo-950 truncate max-w-[120px]">{teacher.name}</td>
+                              <td className="py-2 px-2.5 text-right font-extrabold text-indigo-800">
                                 {firstPeriod + 1}. Ders {time ? `(${time.start})` : ""}
                               </td>
                             </tr>
@@ -351,42 +358,42 @@ export default function RealtimeStatusTab() {
               </div>
             </div>
           </div>
-
-          {/* Card 4: Günlük Tüm Dersleri Bitenler */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
+ 
+          {/* Card 4: Günlük Tüm Dersleri Bitenler (Pastel Rose / Coral) */}
+          <div className="bg-rose-50/90 border border-rose-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-rose-50/100">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5 shrink-0">
-                <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+              <div className="flex items-center justify-between border-b border-rose-200/60 pb-2 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-rose-950 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
                   Tüm Dersleri Bitenler
                 </h3>
-                <span className="bg-purple-50 text-purple-600 font-bold text-[9px] px-1.5 py-0.2 rounded">
-                  {finishedForDay.length}
+                <span className="bg-rose-200/80 text-rose-900 border border-rose-300/50 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                  {finishedForDay.length} Öğretmen
                 </span>
               </div>
-
+ 
               <div className="flex-1 overflow-hidden">
                 {finishedForDay.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-2">
-                    <span className="text-lg mb-1">🏃</span>
-                    <p className="text-[10px] text-slate-400 font-semibold">Henüz ders programını tamamlayan öğretmen yok.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <span className="text-2xl mb-1.5">🏃</span>
+                    <p className="text-xs text-rose-850/70 font-bold">Henüz ders programını tamamlayan öğretmen yok.</p>
                   </div>
                 ) : (
-                  <div className="overflow-y-auto h-full pr-0.5">
-                    <table className="w-full text-[11px] text-left text-slate-700 border-collapse border border-slate-200">
+                  <div className="overflow-y-auto h-full pr-1">
+                    <table className="w-full text-xs text-left text-rose-950 border-collapse border border-rose-200/60 bg-white/70 rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
-                          <th className="py-0.5 px-1.5 border border-slate-200">Öğretmen</th>
-                          <th className="py-0.5 px-1.5 border border-slate-200 text-right">Son Ders Saati</th>
+                        <tr className="bg-rose-100 text-[10px] font-black text-rose-900 uppercase tracking-wider sticky top-0 z-10 border-b border-rose-200/60">
+                          <th className="py-2 px-2.5 border-r border-rose-200/60">Öğretmen</th>
+                          <th className="py-2 px-2.5 text-right">Son Ders Saati</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-rose-100">
                         {finishedForDay.map(({ teacher, lastPeriod }) => {
                           const time = times[lastPeriod];
                           return (
-                            <tr key={teacher.id} className="hover:bg-slate-50/50 transition h-6">
-                              <td className="py-0.5 px-1.5 font-bold text-slate-800 border border-slate-150 truncate max-w-[110px]">{teacher.name}</td>
-                              <td className="py-0.5 px-1.5 text-right font-bold text-purple-600 border border-slate-150">
+                            <tr key={teacher.id} className="hover:bg-rose-100/30 transition-colors">
+                              <td className="py-2 px-2.5 font-bold text-rose-950 truncate max-w-[120px]">{teacher.name}</td>
+                              <td className="py-2 px-2.5 text-right font-extrabold text-rose-800">
                                 {lastPeriod + 1}. Ders {time ? `(${time.end})` : ""}
                               </td>
                             </tr>
@@ -399,40 +406,40 @@ export default function RealtimeStatusTab() {
               </div>
             </div>
           </div>
-
-          {/* Card 5: Bugün Hiç Dersi Olmayanlar */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
+ 
+          {/* Card 5: Bugün Hiç Dersi Olmayanlar (Pastel Emerald / Mint) */}
+          <div className="bg-emerald-50/90 border border-emerald-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-emerald-50/100">
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5 shrink-0">
-                <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"></span>
+              <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-emerald-950 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
                   Bugün Dersi Olmayanlar
                 </h3>
-                <span className="bg-slate-100 text-slate-600 font-bold text-[9px] px-1.5 py-0.2 rounded">
-                  {noLessonsToday.length}
+                <span className="bg-emerald-200/80 text-emerald-900 border border-emerald-300/50 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                  {noLessonsToday.length} Öğretmen
                 </span>
               </div>
-
+ 
               <div className="flex-1 overflow-hidden">
                 {noLessonsToday.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-2">
-                    <span className="text-lg mb-1">📚</span>
-                    <p className="text-[10px] text-slate-400 font-semibold">Bugün tüm öğretmenlerin en az bir dersi var.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <span className="text-2xl mb-1.5">📚</span>
+                    <p className="text-xs text-emerald-850/70 font-bold">Bugün tüm öğretmenlerin en az bir dersi var.</p>
                   </div>
                 ) : (
-                  <div className="overflow-y-auto h-full pr-0.5">
-                    <table className="w-full text-[11px] text-left text-slate-700 border-collapse border border-slate-200">
+                  <div className="overflow-y-auto h-full pr-1">
+                    <table className="w-full text-xs text-left text-emerald-950 border-collapse border border-emerald-200/60 bg-white/70 rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
-                          <th className="py-0.5 px-1.5 border border-slate-200">Öğretmen</th>
-                          <th className="py-0.5 px-1.5 border border-slate-200 text-right">Branş</th>
+                        <tr className="bg-emerald-100 text-[10px] font-black text-emerald-900 uppercase tracking-wider sticky top-0 z-10 border-b border-emerald-200/60">
+                          <th className="py-2 px-2.5 border-r border-emerald-200/60">Öğretmen</th>
+                          <th className="py-2 px-2.5 text-right">Branş</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-emerald-100">
                         {noLessonsToday.map(({ teacher }) => (
-                          <tr key={teacher.id} className="hover:bg-slate-50/50 transition h-6">
-                            <td className="py-0.5 px-1.5 font-bold text-slate-800 border border-slate-150 truncate max-w-[110px]">{teacher.name}</td>
-                            <td className="py-0.5 px-1.5 text-right font-medium text-slate-500 border border-slate-150">
+                          <tr key={teacher.id} className="hover:bg-emerald-100/30 transition-colors">
+                            <td className="py-2 px-2.5 font-bold text-emerald-950 truncate max-w-[120px]">{teacher.name}</td>
+                            <td className="py-2 px-2.5 text-right font-semibold text-emerald-800">
                               {teacher.branch || "Branş Yok"}
                             </td>
                           </tr>
@@ -444,95 +451,97 @@ export default function RealtimeStatusTab() {
               </div>
             </div>
           </div>
-
-          {/* Card 6: İstatistiksel Özet */}
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-2 flex flex-col justify-between h-[230px]">
-            <div className="flex flex-col h-full justify-between">
-              <div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1.5">
-                  <h3 className="text-[10px] font-bold text-slate-800 flex items-center gap-1 uppercase tracking-wider">
-                    <Activity className="w-3.5 h-3.5 text-slate-500 animate-pulse" />
-                    Genel Analiz & Özet
-                  </h3>
-                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">İSTATİSTİKLER</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="bg-slate-50/60 border border-slate-100 rounded p-1 text-center">
-                    <div className="text-sm font-black text-slate-800">{totalTeachers}</div>
-                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Toplam Öğretmen</div>
+ 
+          {/* Card 6: İstatistiksel Özet (Pastel Teal / Soft Cyan) */}
+          <div className="bg-teal-50/90 border border-teal-200/95 rounded-xl shadow-md p-3.5 flex flex-col justify-between min-h-[380px] md:h-[450px] transition-all hover:shadow-lg hover:bg-teal-50/100">
+            <div className="flex flex-col h-full justify-between overflow-hidden">
+              <div className="overflow-y-auto h-full flex flex-col justify-between space-y-3 pr-0.5">
+                <div>
+                  <div className="flex items-center justify-between border-b border-teal-200/60 pb-2 mb-2 shrink-0">
+                    <h3 className="text-xs font-black text-teal-950 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Activity className="w-4 h-4 text-teal-600 animate-pulse" />
+                      Genel Analiz & Özet
+                    </h3>
+                    <span className="text-[9px] bg-teal-200/80 text-teal-900 border border-teal-300/50 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">İstatistik</span>
                   </div>
-                  <div className="bg-blue-50/60 border border-blue-100 rounded p-1 text-center">
-                    <div className="text-sm font-black text-blue-600">{activeCount}</div>
-                    <div className="text-[8px] font-bold text-blue-500 uppercase tracking-wider">Dersteki Öğr.</div>
-                  </div>
-                  <div className="bg-emerald-50/60 border border-emerald-100 rounded p-1 text-center col-span-2">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div className="text-xs font-black text-emerald-600">{inSchoolCount} / {totalTeachers}</div>
-                      <span className="text-[8px] bg-emerald-100 text-emerald-800 font-extrabold px-1 rounded">% {inSchoolPercent}</span>
+ 
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="bg-white/80 border border-teal-200/50 rounded-xl p-2.5 text-center shadow-sm hover:bg-white transition-colors">
+                      <div className="text-xl font-black text-teal-950">{totalTeachers}</div>
+                      <div className="text-[9px] font-black text-teal-700/80 uppercase tracking-wider mt-0.5">Toplam Öğretmen</div>
                     </div>
-                    <div className="text-[8px] font-bold text-emerald-500 uppercase tracking-wider">Okuldaki Öğretmen</div>
+                    <div className="bg-sky-100/80 border border-sky-200/50 rounded-xl p-2.5 text-center shadow-sm hover:bg-white transition-colors">
+                      <div className="text-xl font-black text-sky-950">{activeCount}</div>
+                      <div className="text-[9px] font-black text-sky-700/80 uppercase tracking-wider mt-0.5">Dersteki Öğr.</div>
+                    </div>
+                    <div className="bg-emerald-100/80 border border-emerald-200/50 rounded-xl p-3 text-center col-span-2 shadow-sm hover:bg-white transition-colors">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="text-lg font-black text-emerald-950">{inSchoolCount} / {totalTeachers}</div>
+                        <span className="text-[10px] bg-emerald-200/80 text-emerald-950 font-black px-2 py-0.5 rounded-full border border-emerald-300/40">% {inSchoolPercent}</span>
+                      </div>
+                      <div className="text-[9px] font-black text-emerald-700/80 uppercase tracking-wider mt-1">Okuldaki Aktif Öğretmen Gücü</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-1 mt-1.5">
-                <div className="space-y-0.5">
-                  <div className="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider">
-                    <span>Dağılım Grafiği (Bu Saat)</span>
-                    <span>% {activePercent} Aktif</span>
+ 
+                <div className="space-y-2 pb-1.5 shrink-0">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[9px] font-black text-teal-900 uppercase tracking-wider">
+                      <span>Dağılım Grafiği (Bu Saat)</span>
+                      <span className="text-teal-950">% {activePercent} Aktif Derste</span>
+                    </div>
+                    
+                    <div className="h-3 w-full bg-teal-100/60 border border-teal-200/30 rounded-full flex overflow-hidden shadow-inner">
+                      {activeCount > 0 && (
+                        <div
+                          style={{ width: `${(activeCount / totalTeachers) * 100}%` }}
+                          className="bg-sky-400 h-full transition-all duration-500"
+                          title={`Dersteki Öğretmenler: ${activeCount}`}
+                        />
+                      )}
+                      {breakCount > 0 && (
+                        <div
+                          style={{ width: `${(breakCount / totalTeachers) * 100}%` }}
+                          className="bg-amber-400 h-full transition-all duration-500"
+                          title={`Ders Arasında Olanlar: ${breakCount}`}
+                        />
+                      )}
+                      {notStartedCount > 0 && (
+                        <div
+                          style={{ width: `${(notStartedCount / totalTeachers) * 100}%` }}
+                          className="bg-indigo-400 h-full transition-all duration-500"
+                          title={`Dersleri Başlamamış: ${notStartedCount}`}
+                        />
+                      )}
+                      {finishedCount > 0 && (
+                        <div
+                          style={{ width: `${(finishedCount / totalTeachers) * 100}%` }}
+                          className="bg-rose-400 h-full transition-all duration-500"
+                          title={`Günü Biten Öğretmenler: ${finishedCount}`}
+                        />
+                      )}
+                      {noLessonsCount > 0 && (
+                        <div
+                          style={{ width: `${(noLessonsCount / totalTeachers) * 100}%` }}
+                          className="bg-emerald-400 h-full transition-all duration-500"
+                          title={`Bugün Dersi Olmayanlar: ${noLessonsCount}`}
+                        />
+                      )}
+                    </div>
                   </div>
-                  
-                  <div className="h-2 w-full bg-slate-100 rounded flex overflow-hidden shadow-inner">
-                    {activeCount > 0 && (
-                      <div
-                        style={{ width: `${(activeCount / totalTeachers) * 100}%` }}
-                        className="bg-blue-500 h-full transition-all duration-500"
-                        title={`Dersteki Öğretmenler: ${activeCount}`}
-                      />
-                    )}
-                    {breakCount > 0 && (
-                      <div
-                        style={{ width: `${(breakCount / totalTeachers) * 100}%` }}
-                        className="bg-amber-500 h-full transition-all duration-500"
-                        title={`Ders Arasında Olanlar: ${breakCount}`}
-                      />
-                    )}
-                    {notStartedCount > 0 && (
-                      <div
-                        style={{ width: `${(notStartedCount / totalTeachers) * 100}%` }}
-                        className="bg-indigo-500 h-full transition-all duration-500"
-                        title={`Dersleri Başlamamış: ${notStartedCount}`}
-                      />
-                    )}
-                    {finishedCount > 0 && (
-                      <div
-                        style={{ width: `${(finishedCount / totalTeachers) * 100}%` }}
-                        className="bg-purple-500 h-full transition-all duration-500"
-                        title={`Günü Biten Öğretmenler: ${finishedCount}`}
-                      />
-                    )}
-                    {noLessonsCount > 0 && (
-                      <div
-                        style={{ width: `${(noLessonsCount / totalTeachers) * 100}%` }}
-                        className="bg-slate-400 h-full transition-all duration-500"
-                        title={`Bugün Dersi Olmayanlar: ${noLessonsCount}`}
-                      />
-                    )}
+ 
+                  <div className="flex flex-wrap gap-x-2 gap-y-1 text-[9px] font-black text-teal-950 justify-start">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block border border-sky-300"></span>Derste</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block border border-amber-300"></span>Arada</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block border border-indigo-300"></span>Başlamadı</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block border border-rose-300"></span>Bitti</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block border border-emerald-300"></span>Yok</span>
                   </div>
-                </div>
-
-                <div className="flex flex-wrap gap-x-1 gap-y-0.5 text-[8px] font-bold text-slate-500 justify-start">
-                  <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded bg-blue-500 inline-block"></span>Derste</span>
-                  <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded bg-amber-500 inline-block"></span>Arada</span>
-                  <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded bg-indigo-500 inline-block"></span>Başlamadı</span>
-                  <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded bg-purple-500 inline-block"></span>Bitti</span>
-                  <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded bg-slate-400 inline-block"></span>Yok</span>
                 </div>
               </div>
             </div>
           </div>
-
+ 
         </div>
       </div>
     </motion.div>
