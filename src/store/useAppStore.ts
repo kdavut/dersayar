@@ -2,9 +2,8 @@ import React from 'react';
 import { create } from 'zustand';
 import { AppState, FullHistoryState } from '../types';
 import { generateDemoState, createEmptyUnavailability } from '../utils/demoData';
-import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler, getDefaultMaxDepth } from '../utils/scheduler';
-import { db } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler, getDefaultMaxDepth, preSolveFeasibilityCheck } from '../utils/scheduler';
+import { loadScheduleFromCloud, saveScheduleToCloud } from '../firebase';
 
 const LOCAL_STORAGE_KEY = "okul_ders_programi_state";
 
@@ -179,7 +178,7 @@ interface AppStoreActions {
   verileri_hazırla: () => Promise<AppState>;
   dersleri_yerleştir: (preparedState: AppState, keepExisting: boolean, targets?: { classIds?: string[], teacherIds?: string[] }) => Promise<any>;
   stopAutomaticScheduler: () => void;
-  runAutomaticScheduler: (keepExisting: boolean, targets?: { classIds?: string[], teacherIds?: string[] }) => Promise<void>;
+  runAutomaticScheduler: (keepExisting: boolean, targets?: { classIds?: string[], teacherIds?: string[] }, bypassFeasibilityCheck?: boolean) => Promise<void>;
   handleAutoGenerateClick: () => void;
   handleScheduleSelectedTeacher: () => void;
   handleScheduleAllTeachers: () => void;
@@ -380,37 +379,9 @@ export const useAppStore = create<AppStore>((set) => ({
     }
 
     try {
-      if (!db) {
-        set({
-          toast: { message: "Bulut veritabanı bağlantısı kurulamadı.", type: "error" }
-        });
-        return;
-      }
-
-      const scheduleRef = doc(db, "schedules", user.uid);
-      const docSnap = await getDoc(scheduleRef);
-
       // Clean undefined values for Firestore compatibility by serializing and parsing
       const cleanedState = JSON.parse(JSON.stringify(historyState.current));
-
-      if (docSnap.exists()) {
-        const existingData = docSnap.data();
-        await setDoc(scheduleRef, {
-          userId: user.uid,
-          title: cleanedState.settings?.schoolName || "Ders Programı",
-          state: cleanedState,
-          createdAt: existingData.createdAt || serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-      } else {
-        await setDoc(scheduleRef, {
-          userId: user.uid,
-          title: cleanedState.settings?.schoolName || "Ders Programı",
-          state: cleanedState,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-      }
+      await saveScheduleToCloud(user.uid, cleanedState, cleanedState.settings?.schoolName || "Ders Programı");
 
       const updatedHistory = {
         ...historyState,
@@ -456,39 +427,36 @@ export const useAppStore = create<AppStore>((set) => ({
     if (!user) return;
 
     try {
-      if (!db) return;
+      const data = await loadScheduleFromCloud(user.uid);
 
-      const scheduleRef = doc(db, "schedules", user.uid);
-      const docSnap = await getDoc(scheduleRef);
+      if (data && data.state) {
+        const loadedHistory = {
+          current: data.state,
+          past: [],
+          future: [],
+          isSynced: true
+        };
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && data.state) {
-          const loadedHistory = {
-            current: data.state,
-            past: [],
-            future: [],
-            isSynced: true
-          };
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({ current: data.state, isSynced: true })
+        );
 
-          localStorage.setItem(
-            LOCAL_STORAGE_KEY,
-            JSON.stringify({ current: data.state, isSynced: true })
-          );
-
-          set({
-            historyState: loadedHistory,
-            toast: { message: "Ders programınız buluttan başarıyla yüklendi.", type: "success" }
-          });
-        }
+        set({
+          historyState: loadedHistory,
+          toast: { message: "Ders programınız buluttan başarıyla yüklendi.", type: "success" }
+        });
       } else {
         console.log("No cloud data found. Saving local state to cloud.");
         await store.saveToCloud();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Buluttan yükleme hatası:", error);
       set({
-        toast: { message: "Veriler buluttan yüklenirken bir hata oluştu.", type: "error" }
+        toast: { 
+          message: `Veriler buluttan yüklenirken bir hata oluştu: ${error?.message || error}`, 
+          type: "error" 
+        }
       });
     }
   },
@@ -557,9 +525,7 @@ export const useAppStore = create<AppStore>((set) => ({
                 { start: "15:10", end: "15:50" }
               ],
               lunchBreakAfter: 5,
-              lunchBreakDuration: 60,
-              groupLessonsMode: "same_day",
-              maxTeacherDailyGaps: 2
+              lunchBreakDuration: 60
             },
             teachers: [],
             classes: [],
@@ -863,8 +829,7 @@ export const useAppStore = create<AppStore>((set) => ({
       targetClassIds: targets?.classIds,
       targetTeacherIds: targets?.teacherIds,
       deepSearch: store.deepSearch,
-      numTrials: store.numTrials,
-      maxDepth: preparedState.settings.maxDepth ?? getDefaultMaxDepth(preparedState.teachers.length)
+      numTrials: store.numTrials
     });
     return result;
   },
@@ -872,79 +837,56 @@ export const useAppStore = create<AppStore>((set) => ({
   stopAutomaticScheduler: () => {
     const store = useAppStore.getState();
     
-    // Terminate the active worker
+    // Stop the active worker (soft-stop)
     stopActiveScheduler();
     
-    const progress = store.schedulingProgress;
-    if (progress && progress.bestSchedule) {
-      // Create a deep copy of the best schedule found so far
-      const lockedSchedule = JSON.parse(JSON.stringify(progress.bestSchedule));
-      
-      // Update state's schedule with this best-intermediate schedule (without auto-locking all slots)
-      store.updateState((draft) => {
-        draft.schedule = lockedSchedule;
-      });
-
-      // Compute diagnostics and reports on the main thread for the unplaced items
-      const { settings, teachers, classes, assignments } = store.historyState.current;
-      const numDays = settings.days.length;
-      const numPeriods = settings.periodsPerDay;
-      const scheduledHoursCount: { [assignId: string]: number } = {};
-      
-      for (const cId of Object.keys(lockedSchedule)) {
-        for (let d = 0; d < numDays; d++) {
-          const daySlots = lockedSchedule[cId][d];
-          if (daySlots) {
-            for (let p = 0; p < numPeriods; p++) {
-              const slot = daySlots[p];
-              if (slot) {
-                scheduledHoursCount[slot.assignmentId] = (scheduledHoursCount[slot.assignmentId] || 0) + 1;
-              }
-            }
-          }
-        }
-      }
-
-      const unplacedReports: any[] = [];
-      for (const assign of assignments) {
-        const placed = scheduledHoursCount[assign.id] || 0;
-        const remaining = assign.weeklyHours - placed;
-        if (remaining > 0) {
-          const teacherNames = assign.teacherId
-            ? assign.teacherId.split(",").map(id => teachers.find(t => t.id === id)?.name || id).join(", ")
-            : "Öğretmensiz";
-
-          unplacedReports.push({
-            id: assign.id,
-            assignmentId: assign.id,
-            classId: assign.classId,
-            className: classes.find(c => c.id === assign.classId)?.name || assign.classId,
-            courseId: assign.courseId,
-            courseName: store.historyState.current.courses?.find((c: any) => c.id === assign.courseId)?.name || assign.courseId,
-            teacherId: assign.teacherId || "",
-            teacherName: teacherNames,
-            size: remaining,
-            reason: "Kullanıcı tarafından durduruldu.",
-            suggestions: ["Ders programını tekrar başlatabilir veya kalan dersleri manuel yerleştirebilirsiniz."]
-          });
-        }
-      }
-
-      store.setUnplacedReports(unplacedReports);
-      store.showToast("Planlama işlemi durduruldu. Mevcut yerleşimler korundu.", "info");
-    } else {
-      store.showToast("Planlama işlemi durduruldu.", "info");
-    }
-
+    // Immediately close the progress overlay/modal for instant visual response
     store.setIsScheduling(false);
     store.setSchedulingProgress(null);
+    
+    store.showToast("Planlama durduruluyor... Mevcut en iyi program kaydediliyor.", "info");
   },
 
-  runAutomaticScheduler: async (keepExisting, targets) => {
+  runAutomaticScheduler: async (keepExisting, targets, bypassFeasibilityCheck) => {
     const store = useAppStore.getState();
     if (!store.user) {
       store.showToast("Değişiklik yapabilmek için lütfen geçerli bir lisansa sahip yönetici hesabı ile giriş yapın (SaaS Lisans Koruması).", "error");
       return;
+    }
+
+    // Pre-Solve Feasibility Check (Feature 5)
+    if (!bypassFeasibilityCheck) {
+      const state = store.historyState.current;
+      let feasibilityIssues = preSolveFeasibilityCheck(state);
+      
+      // If we are targeting specific teachers or classes, only alert about issues that affect those targets
+      if (targets?.teacherIds && targets.teacherIds.length > 0) {
+        feasibilityIssues = feasibilityIssues.filter(issue => {
+          const matchedTeacher = state.teachers.find(t => t.name === issue.entityName);
+          return issue.entityType === "teacher" && matchedTeacher && targets.teacherIds!.includes(matchedTeacher.id);
+        });
+      } else if (targets?.classIds && targets.classIds.length > 0) {
+        feasibilityIssues = feasibilityIssues.filter(issue => {
+          const matchedClass = state.classes.find(c => c.name === issue.entityName);
+          return issue.entityType === "class" && matchedClass && targets.classIds!.includes(matchedClass.id);
+        });
+      }
+
+      if (feasibilityIssues.length > 0) {
+        const errorMessage = feasibilityIssues.map(issue => `• ${issue.message}`).join("\n\n");
+        store.setConfirmModal({
+          isOpen: true,
+          title: "Matematiksel İmtiyazsızlık Tespit Edildi (Tam Çözüm İmkânsız!)",
+          message: `Ders programında çözülemeyecek kısıtlar tespit edildi:\n\n${errorMessage}\n\nYine de planlama motorunu çalıştırmak ve mümkün olan en iyi kısmı çözümü üretmek istiyor musunuz?`,
+          confirmText: "Yine de Çalıştır",
+          isDangerous: true,
+          action: () => {
+            store.setConfirmModal(null);
+            store.runAutomaticScheduler(keepExisting, targets, true);
+          }
+        });
+        return;
+      }
     }
     
     // Determine target teacher or class names early

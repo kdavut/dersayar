@@ -1,6 +1,15 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  Firestore, 
+  doc, 
+  DocumentReference, 
+  DocumentData,
+  getDoc,
+  setDoc,
+  serverTimestamp
+} from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from 'firebase/app-check';
 
 /**
@@ -76,5 +85,62 @@ if (isFirebaseConfigured()) {
     "Please add your Firebase credentials to your environment variables or directly inside 'src/firebase.ts'."
   );
 }
+
+export const getFirestoreDb = (): Firestore | null => {
+  if (db) return db;
+  if (isFirebaseConfigured()) {
+    try {
+      const activeApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      db = getFirestore(activeApp);
+      return db;
+    } catch (error) {
+      console.error("Failed to initialize Firestore dynamically:", error);
+    }
+  }
+  return null;
+};
+
+export const getScheduleDocRef = (userId: string): DocumentReference<DocumentData> | null => {
+  const activeDb = getFirestoreDb();
+  if (!activeDb) return null;
+  return doc(activeDb, "schedules", userId);
+};
+
+export const loadScheduleFromCloud = async (userId: string): Promise<any> => {
+  const activeDb = getFirestoreDb();
+  if (!activeDb) throw new Error("Firestore veritabanına erişilemiyor.");
+  const scheduleRef = doc(activeDb, "schedules", userId);
+  const docSnap = await getDoc(scheduleRef);
+  if (docSnap.exists()) {
+    return docSnap.data();
+  }
+  return null;
+};
+
+export const saveScheduleToCloud = async (userId: string, cleanedState: any, schoolName: string): Promise<void> => {
+  const activeDb = getFirestoreDb();
+  if (!activeDb) throw new Error("Firestore veritabanına erişilemiyor.");
+  const scheduleRef = doc(activeDb, "schedules", userId);
+  
+  const docSnap = await getDoc(scheduleRef);
+  if (docSnap.exists()) {
+    const existingData = docSnap.data();
+    await setDoc(scheduleRef, {
+      userId: userId,
+      title: schoolName || "Ders Programı",
+      state: cleanedState,
+      createdAt: existingData.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } else {
+    await setDoc(scheduleRef, {
+      userId: userId,
+      title: schoolName || "Ders Programı",
+      state: cleanedState,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  }
+};
 
 export { app, db, auth, appCheck };

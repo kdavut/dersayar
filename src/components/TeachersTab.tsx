@@ -32,7 +32,7 @@ export default function TeachersTab() {
         if (teacher) {
           teacher.name = newTeacher.name;
           teacher.branch = newTeacher.branch;
-          teacher.shortName = newTeacher.shortName.trim().toUpperCase();
+          teacher.shortName = newTeacher.shortName.trim().toLocaleUpperCase("tr-TR");
           teacher.homeroomClass = newTeacher.homeroomClass.trim();
         }
         setEditingTeacherId(null);
@@ -44,7 +44,7 @@ export default function TeachersTab() {
           id,
           name: newTeacher.name,
           branch: newTeacher.branch,
-          shortName: newTeacher.shortName.trim().toUpperCase() || undefined,
+          shortName: newTeacher.shortName.trim().toLocaleUpperCase("tr-TR") || undefined,
           homeroomClass: newTeacher.homeroomClass.trim() || undefined,
           unavailability: createEmptyUnavailability(draft.settings.days.length, draft.settings.periodsPerDay)
         };

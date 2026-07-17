@@ -59,7 +59,7 @@ export default function ClassroomsTab() {
         const item = draft.classrooms.find((cr) => cr.id === editingClassroomId);
         if (item) {
           item.name = newClassroom.name;
-          item.shortName = newClassroom.shortName.toUpperCase();
+          item.shortName = newClassroom.shortName.toLocaleUpperCase("tr-TR");
         }
         setEditingClassroomId(null);
         showToast("Atölye güncellendi.", "success");
@@ -68,7 +68,7 @@ export default function ClassroomsTab() {
         const item: Classroom = {
           id,
           name: newClassroom.name,
-          shortName: newClassroom.shortName.toUpperCase(),
+          shortName: newClassroom.shortName.toLocaleUpperCase("tr-TR"),
           type: "workshop" as const,
           unavailability: createEmptyUnavailability(draft.settings.days.length, draft.settings.periodsPerDay)
         };
@@ -137,7 +137,7 @@ export default function ClassroomsTab() {
         <div>
           <h4 className="text-xs font-bold text-blue-950 uppercase tracking-wide">Önemli Atölye Planlama Önerisi</h4>
           <p className="text-[11px] leading-relaxed mt-0.5 text-blue-800 font-medium">
-            Tüm ders programı yerleştirildikten sonra atölyelere ders atamanız daha uygun olur. Önce ana programı hazırlayıp dersleri yerleştirin, ardından atölyeleri tanımlayıp buraya atayabilirsiniz.
+            Bir atölyeye ne kadar çok ders atanırsa, çakışma ihtimali o kadar artacak ve ders programının otomatik olarak oluşturulması o kadar zorlaşacaktır. Atölye ders atamalarını dengeli yapmanız önerilir.
           </p>
         </div>
       </div>
@@ -365,7 +365,9 @@ export default function ClassroomsTab() {
             {/* Yeni Sınıf-Ders Atama Paneli */}
             <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
               <div className="mb-3">
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Ders - Sınıf Arama</label>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                  Ders - Sınıf Arama {assignmentSearch.trim() ? `(${filteredAssignments.length} bulundu)` : ""}
+                </label>
                 <input
                   type="text"
                   value={assignmentSearch}
@@ -374,7 +376,9 @@ export default function ClassroomsTab() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                 />
               </div>
-              <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2.5">Sınıf & Ders Atama</h4>
+              <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2.5">
+                Sınıf & Ders Atama {assignmentSearch.trim() ? `(${filteredAssignments.length})` : ""}
+              </h4>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <select

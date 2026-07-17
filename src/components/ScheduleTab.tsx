@@ -90,6 +90,7 @@ export default function ScheduleTab({
   } = useAppStore();
 
   const { current: state } = historyState;
+  const [isEditingSectionOpen, setIsEditingSectionOpen] = React.useState(false);
   const activeConflicts = detectConflicts(state);
 
   // Re-declare maps
@@ -100,18 +101,6 @@ export default function ScheduleTab({
 
   const handleSelectCellForEditing = (dayIndex: number, periodIndex: number, classId: string) => {
     setEditingCell({ dayIndex, periodIndex, classId });
-  };
-
-  const handleUpdateSchoolSettings = (key: "groupLessonsMode" | "maxTeacherDailyGaps" | "maxDepth", value: any) => {
-    updateState((draft) => {
-      if (key === "groupLessonsMode") {
-        draft.settings.groupLessonsMode = value;
-      } else if (key === "maxTeacherDailyGaps") {
-        draft.settings.maxTeacherDailyGaps = value;
-      } else if (key === "maxDepth") {
-        draft.settings.maxDepth = value;
-      }
-    });
   };
 
   const checkDragMoveConflicts = (
@@ -1536,10 +1525,14 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
     }
   }, [activeConflicts.length, unplacedReports.length, isAnalysisOpen, setIsAnalysisOpen]);
 
-  // Automatically select the first assignment of the selected teacher or class
+  // Automatically select the first assignment of the selected teacher or class, keeping current selection if valid
   useEffect(() => {
     if (scheduleViewMode === "teacher" && viewingEntityId) {
       const teacherAssignments = state.assignments.filter(a => a.teacherId && a.teacherId.split(",").includes(viewingEntityId));
+      const currentStillValid = teacherAssignments.some(a => a.id === selectedAssignmentId);
+      if (currentStillValid) {
+        return;
+      }
       if (teacherAssignments.length > 0) {
         setSelectedAssignmentId(teacherAssignments[0].id);
       } else {
@@ -1547,13 +1540,17 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
       }
     } else if (scheduleViewMode === "class" && viewingEntityId) {
       const classAssignments = state.assignments.filter(a => a.classId === viewingEntityId);
+      const currentStillValid = classAssignments.some(a => a.id === selectedAssignmentId);
+      if (currentStillValid) {
+        return;
+      }
       if (classAssignments.length > 0) {
         setSelectedAssignmentId(classAssignments[0].id);
       } else {
         setSelectedAssignmentId("");
       }
     }
-  }, [viewingEntityId, scheduleViewMode, state.assignments, setSelectedAssignmentId]);
+  }, [viewingEntityId, scheduleViewMode, state.assignments, setSelectedAssignmentId, selectedAssignmentId]);
 
   // Handle outside click to dismiss context menus
   useEffect(() => {
@@ -2017,7 +2014,7 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                   }
                                 }
 
-                                const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
 
                                 const cellConflicts = activeConflicts.filter(
                                   (conf) => conf.dayIndex === dIdx && conf.periodIndex === pIdx && (
@@ -2098,6 +2095,72 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                   return true;
                                 })();
 
+                                const isClosedButPlaceable = (() => {
+                                  if (!currentActiveAssignment) return false;
+                                  if (cellIsImpossiblePeriod) return false;
+
+                                  // Check if it is actually closed / unavailable for this assignment or cell
+                                  const targetClassObj = classesMap.get(currentActiveAssignment.classId);
+                                  const tIds = currentActiveAssignment.teacherId 
+                                    ? currentActiveAssignment.teacherId.split(",").map(id => id.trim()).filter(Boolean) 
+                                    : [];
+
+                                  const isTeacherUnavailable = tIds.some(tId => {
+                                    const teacherObj = teachersMap.get(tId);
+                                    return !!(teacherObj && teacherObj.unavailability?.[dIdx]?.[pIdx]);
+                                  });
+                                  const isClassUnavailable = !!(targetClassObj && targetClassObj.unavailability?.[dIdx]?.[pIdx]);
+                                  const isClassroomUnavailable = !!(currentActiveAssignment.classroomId && classroomsMap.get(currentActiveAssignment.classroomId)?.unavailability?.[dIdx]?.[pIdx]);
+
+                                  const hasAnyUnavailability = cellIsUnavailabilityLocked || isTeacherUnavailable || isClassUnavailable || isClassroomUnavailable;
+                                  
+                                  // If there is no unavailability at all, then it's not "closed", so it can't be "closed but placeable".
+                                  if (!hasAnyUnavailability) return false;
+
+                                  // Now check if it would be fully placeable if we ignore unavailability locks:
+                                  
+                                  // 1. Daily periods limit for the class of the assignment
+                                  if (targetClassObj && targetClassObj.dailyPeriods) {
+                                    const maxPeriodsThisDay = targetClassObj.dailyPeriods[dIdx];
+                                    if (maxPeriodsThisDay !== undefined && pIdx >= maxPeriodsThisDay) {
+                                      return false;
+                                    }
+                                  }
+
+                                  // 2. Busy states (Teacher busy elsewhere in another class)
+                                  for (const tId of tIds) {
+                                    for (const otherClassId of Object.keys(state.schedule)) {
+                                      if (otherClassId === currentActiveAssignment.classId) continue;
+                                      const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
+                                      if (otherSlot && otherSlot.teacherId) {
+                                        const otherTIds = otherSlot.teacherId.split(",").map(id => id.trim()).filter(Boolean);
+                                        if (otherTIds.includes(tId)) {
+                                          return false;
+                                        }
+                                      }
+                                    }
+                                  }
+
+                                  // 3. Class has another lesson already
+                                  const classSlot = state.schedule[currentActiveAssignment.classId]?.[dIdx]?.[pIdx];
+                                  if (classSlot && classSlot.assignmentId !== currentActiveAssignment.id) {
+                                    return false;
+                                  }
+
+                                  // 4. Classroom busy elsewhere
+                                  if (currentActiveAssignment.classroomId) {
+                                    for (const otherClassId of Object.keys(state.schedule)) {
+                                      if (otherClassId === currentActiveAssignment.classId) continue;
+                                      const otherSlot = state.schedule[otherClassId]?.[dIdx]?.[pIdx];
+                                      if (otherSlot && otherSlot.classroomId === currentActiveAssignment.classroomId) {
+                                        return false;
+                                      }
+                                    }
+                                  }
+
+                                  return true;
+                                })();
+
                                 let cellStyle = "";
 
                                 if (cellIsImpossiblePeriod) {
@@ -2108,19 +2171,19 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                                   if (slot.isLocked) {
                                     // Kilitlenmiş / sabitlenmiş ders kırmızı (per user request!)
-                                    cellStyle = "bg-rose-600 text-white font-extrabold border border-rose-700 shadow-sm cursor-pointer";
+                                    cellStyle = "bg-rose-600 text-white font-extrabold border-2 border-yellow-400 shadow-sm cursor-pointer";
                                   } else if (hasConflict) {
                                     // çakışan veya yerleştirilemeyen dersler kırmızı/uyarı rengi (per user request!)
-                                    cellStyle = "bg-red-500 text-white font-bold border border-red-600 hover:bg-red-600 cursor-pointer animate-pulse-subtle";
+                                    cellStyle = "bg-red-500 text-white font-bold border-2 border-yellow-400 hover:bg-red-600 cursor-pointer animate-pulse-subtle";
                                   } else if (isSefflikOrKoordinatorluk) {
                                     // koordinatörlük veya şeflik görevi verilen kutular pembe (per user request!)
-                                    cellStyle = "bg-pink-100 text-pink-850 font-bold border border-pink-200";
+                                    cellStyle = "bg-pink-100 text-pink-850 font-bold border-2 border-yellow-400";
                                   } else if (isMultiTeacher) {
                                     // bir derse birden fazla öğretmen giriyorsa o ders yerleştirildiğinde açık mor
-                                    cellStyle = "bg-purple-100 text-purple-850 font-bold border border-purple-200";
+                                    cellStyle = "bg-purple-100 text-purple-850 font-bold border-2 border-yellow-400";
                                   } else {
                                     // normal yerleşen hücre & atölye dersleri: soluk mavi
-                                    cellStyle = "bg-blue-100 text-blue-850 font-bold border border-blue-200";
+                                    cellStyle = "bg-blue-100 text-blue-850 font-bold border-2 border-yellow-400";
                                   }
 
                                   // If an assignment is selected, and this cell has no collision elsewhere (open/available slot)
@@ -2159,8 +2222,10 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                                 if (slot && selectedAssignmentId === slot.assignmentId) {
                                   cellStyle += " highlight-yellow-border ring-2 ring-yellow-400/80 z-30 shadow-lg shadow-yellow-200/40 scale-[1.02]";
+                                } else if (selectedAssignmentId && isClosedButPlaceable) {
+                                  cellStyle += " highlight-green-border ring-2 ring-emerald-500/80 z-40 shadow-lg shadow-emerald-300/50 scale-[1.01]";
                                 } else if (selectedAssignmentId && isAssignmentPartiallyPlaced && canAssignToCell) {
-                                  cellStyle += " highlight-orange-border ring-2 ring-orange-500/80 z-30 shadow-lg shadow-orange-200/40 scale-[1.01]";
+                                  cellStyle += " highlight-green-border ring-2 ring-emerald-500/80 z-30 shadow-lg shadow-emerald-200/40 scale-[1.01]";
                                 }
 
                                 // Define typography colors depending on background
@@ -2202,6 +2267,11 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                                     <td className="p-0 border border-slate-200">
                                       <div
                                         id={`cell-${dIdx}-${pIdx}`}
+                                        title={
+                                          isClosedButPlaceable
+                                            ? "Bu zaman dilimi kapalı fakat açılırsa bu ders yerleşebilir."
+                                            : activeStatus.reason || undefined
+                                        }
                                         tabIndex={cellIsImpossiblePeriod ? -1 : 0}
                                         onKeyDown={(e) => {
                                           if (cellIsImpossiblePeriod) return;
@@ -2458,15 +2528,14 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           </>
                         )}
                         <button
-                          onClick={() => setIsSchedulerSettingsOpen(!isSchedulerSettingsOpen)}
+                          onClick={() => setIsEditingSectionOpen(!isEditingSectionOpen)}
                           className={`font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 border ${
-                            isSchedulerSettingsOpen 
-                              ? "bg-blue-600 border-blue-700 text-white" 
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                            isEditingSectionOpen 
+                              ? "bg-yellow-200 border-yellow-300 text-yellow-900" 
+                              : "bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border-yellow-200"
                           }`}
                         >
-                          <Settings className="w-3.5 h-3.5 shrink-0" />
-                          <span>Algoritma Ayarları</span>
+                          <span>Düzenleme</span>
                         </button>
                         <button
                           onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
@@ -2499,9 +2568,105 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                       </div>
                     </div>
 
-                    {/* COLLAPSIBLE ALGORİTMA AYARLARI PANELİ */}
+                    {/* MODAL ALGORİTMA AYARLARI PANELİ (ARKASI FLU) */}
                     <AnimatePresence>
                       {isSchedulerSettingsOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                          {/* Backdrop / Overlay */}
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsSchedulerSettingsOpen(false)}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+                          />
+                          
+                          {/* Modal Container */}
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                            className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-10 max-h-[90vh]"
+                          >
+                            {/* Header */}
+                            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
+                              <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-100 flex items-center gap-2">
+                                <Settings className="w-4 h-4 text-blue-400 shrink-0" />
+                                <span>Algoritma & Dağıtım Ayarları</span>
+                              </h3>
+                              <button 
+                                onClick={() => setIsSchedulerSettingsOpen(false)}
+                                className="text-slate-400 hover:text-slate-200 font-extrabold text-sm w-7 h-7 flex items-center justify-center hover:bg-slate-800 rounded-full transition-colors cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+
+                            {/* Scrollable Content */}
+                            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-700">
+                              <div className="bg-blue-50/50 border border-blue-200/60 p-5 rounded-2xl flex flex-col gap-3">
+                                <span className="font-extrabold text-blue-900 flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                                  Ders Programı Akıllı Motoru Aktif
+                                </span>
+                                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                                  Tüm planlama ve dağıtım kriterleri, yapay zeka destekli tek bir gelişmiş matematiksel optimizasyon modeli altında birleştirilmiştir. Motorumuz her dağıtımda aşağıdaki üç üst düzey kuralı otomatik ve ödünsüz olarak uygular:
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-4">
+                                {/* 1. EJECTION CHAIN */}
+                                <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col gap-2 shadow-sm">
+                                  <span className="font-black text-xs text-slate-900 flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center font-bold text-[10px]">1</span>
+                                    Kayıpsız Zincirleme Değişim (Ejection Chain)
+                                  </span>
+                                  <p className="text-[10px] text-slate-500 leading-relaxed font-medium pl-7">
+                                    Hedef dersleri yerleştirmek için gerekirse yerleşmiş diğer dersleri zincirleme olarak başka gün veya saatlere kaydırır/takaslar. Ancak bu işlem sonucunda <strong>sistemdeki toplam yerleşmiş ders sayısı asla azalmaz (sıfır net kayıp).</strong> Herhangi bir ders kaybı tespit edilirse tüm zincir otomatik olarak geri alınır.
+                                  </p>
+                                </div>
+
+                                {/* 2. BLOCK INTEGRITY */}
+                                <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col gap-2 shadow-sm">
+                                  <span className="font-black text-xs text-slate-900 flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold text-[10px]">2</span>
+                                    Rigid Blok Bütünlüğü Kısıtı
+                                  </span>
+                                  <p className="text-[10px] text-slate-500 leading-relaxed font-medium pl-7">
+                                    Haftalık dersleriniz tanımlanan blok yapısına göre (örneğin 2+2) atomik parçalar halinde ele alınır. <strong>Hiçbir ders bloğu bölünemez</strong>, günün farklı saatlerine veya farklı günlere parçalanarak dağıtılamaz. Bloklar her zaman kesintisiz ardışık saatlerde tek parça olarak yerleştirilir.
+                                  </p>
+                                </div>
+
+                                {/* 3. CONVERGENCE & IDEMPOTENCY */}
+                                <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col gap-2 shadow-sm">
+                                  <span className="font-black text-xs text-slate-900 flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center font-bold text-[10px]">3</span>
+                                    Anytime & Idempotent Otomatik Sonlanma
+                                  </span>
+                                  <p className="text-[10px] text-slate-500 leading-relaxed font-medium pl-7">
+                                    Yerleştirilemeyen ders kalmadığı anda motor gereksiz süre kaybetmeden kendiliğinden durur. Ayrıca <strong>idempotent restart garantisi</strong> sayesinde, motoru tekrar tetiklediğinizde mevcut yerleşimleriniz korunur ve asla önceki dağıtımdan daha kötü bir sonuç üretilmez.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="bg-slate-50 px-6 py-4 flex items-center justify-end border-t border-slate-200">
+                              <button
+                                onClick={() => setIsSchedulerSettingsOpen(false)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-colors cursor-pointer shadow-md shadow-blue-200"
+                              >
+                                Tamam
+                              </button>
+                            </div>
+                          </motion.div>
+                        </div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* COLLAPSIBLE DÜZENLEME PANELİ */}
+                    <AnimatePresence>
+                      {isEditingSectionOpen && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
@@ -2509,158 +2674,56 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                           className="mt-3 p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-xs text-slate-800 space-y-4 overflow-hidden shrink-0"
                         >
                           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                            <span className="font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5 text-blue-700">
-                              <Settings className="w-4 h-4 text-blue-600 shrink-0" />
-                              Ders Programı Algoritma ve Dağıtım Ayarları
+                            <span className="font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5 text-amber-600">
+                              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                              Ders Programı Düzenleme ve Optimizasyon Araçları
                             </span>
                             <button 
-                              onClick={() => setIsSchedulerSettingsOpen(false)}
+                              onClick={() => setIsEditingSectionOpen(false)}
                               className="text-slate-400 hover:text-slate-600 font-bold px-1.5 py-0.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             >
                               ✕
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {/* Option 1: Group lessons mode */}
-                            <div className="flex flex-col gap-1.5 col-span-1 md:col-span-2">
-                              <span className="font-bold text-slate-700 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                Ders Dağıtım Biçimi (Aynı Güne Toplama / Farklı Günlere Yayma):
-                              </span>
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateSchoolSettings("groupLessonsMode", "different_days_strict")}
-                                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer border ${
-                                    state.settings.groupLessonsMode === "different_days_strict"
-                                      ? "bg-blue-600 border-blue-700 text-white shadow-md transform scale-[1.02]"
-                                      : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
-                                  }`}
-                                >
-                                  Ayrı Güne Kesinlikle Yerleştir
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateSchoolSettings("groupLessonsMode", "different_days_flexible")}
-                                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer border ${
-                                    state.settings.groupLessonsMode === "different_days_flexible" || !state.settings.groupLessonsMode
-                                      ? "bg-blue-600 border-blue-700 text-white shadow-md transform scale-[1.02]"
-                                      : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
-                                  }`}
-                                >
-                                  Gerekirse Aynı Güne Yerleşebilir
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateSchoolSettings("groupLessonsMode", "same_day")}
-                                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer border ${
-                                    state.settings.groupLessonsMode === "same_day"
-                                      ? "bg-blue-600 border-blue-700 text-white shadow-md transform scale-[1.02]"
-                                      : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
-                                  }`}
-                                >
-                                  Aynı Güne Yerleştir (Blok/Ardışık)
-                                </button>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed">
-                                <strong>Ayrı Güne Kesinlikle Yerleştir:</strong> Bir derse ait farklı ders gruplarının (örn. 2+2) kesinlikle farklı günlere dağıtılmasını zorunlu kılar.<br />
-                                <strong>Gerekirse Aynı Güne Yerleşebilir:</strong> Öncelikli olarak farklı günlere yaymaya çalışır, fakat sıkışık programlarda aynı güne de yerleşim yapabilir.<br />
-                                <strong>Aynı Güne Yerleştir (Blok/Ardışık):</strong> Bölünmüş dersleri öncelikle aynı güne yan yana yerleştirmeyi dener.
-                              </span>
-                            </div>
+                          <div className="flex flex-col gap-3">
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              Bu araçlar, mevcut ders programı yerleşimini bozmadan ve herhangi bir çakışmaya yol açmadan (boş olan uygun saatlere kaydırarak) programınızı daha düzenli, kompakt ve öğretmenler için daha az boşluklu hale getirmenizi sağlar.
+                            </span>
 
-                            {/* Option 2: Max daily gaps */}
-                            <div className="flex flex-col gap-1.5 col-span-1">
-                              <span className="font-bold text-slate-700 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                Öğretmen günlük en fazla boşluk:
-                              </span>
-                              <div className="flex items-center gap-2 mt-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="8"
-                                  value={state.settings.maxTeacherDailyGaps ?? 1}
-                                  onChange={(e) => handleUpdateSchoolSettings("maxTeacherDailyGaps", parseInt(e.target.value, 10) || 0)}
-                                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl px-4 py-1.5 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
-                                />
-                                <span className="text-xs text-slate-600 font-black">boş ders saati</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed">
-                                Otomatik dağıtımda öğretmenlerin programlarında gün içinde en fazla bu kadar ders saati pencere/boşluk kalmasına izin verilir.
-                              </span>
-                            </div>
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (scheduleViewMode === "teacher" && viewingEntityId) {
+                                    optimizeGapsForTeacher(viewingEntityId);
+                                  } else {
+                                    showToast("Seçili öğretmenin boşluğunu azaltmak için lütfen önce Ders Programı tablosunda bir öğretmeni seçin.", "info");
+                                  }
+                                }}
+                                className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-100 cursor-pointer"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                Seçili Öğretmenin Boşluğunu Azalt
+                              </button>
 
-                            {/* Option 3: Max Depth Slider */}
-                            <div className="flex flex-col gap-1.5 col-span-1 md:col-span-3 border-t border-slate-100 pt-3">
-                              <span className="font-bold text-slate-700 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                Çözüm Derinliği (Arama Derinliği):
-                              </span>
-                              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 mt-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-                                <div className="flex items-center gap-3 flex-1">
-                                  <input
-                                    type="range"
-                                    min="5"
-                                    max="30"
-                                    value={state.settings.maxDepth ?? getDefaultMaxDepth(state.teachers.length)}
-                                    onChange={(e) => handleUpdateSchoolSettings("maxDepth", parseInt(e.target.value, 10))}
-                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                                  />
-                                  <span className="text-sm font-extrabold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 font-mono w-12 text-center">
-                                    {state.settings.maxDepth ?? getDefaultMaxDepth(state.teachers.length)}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-slate-500 font-semibold leading-relaxed md:max-w-md">
-                                  <strong>Çözüm Derinliği:</strong> Algoritmanın karmaşık çakışmaları çözmek için yapacağı arama derinliğini belirler. maxDepth parametresiyle entegre arama döngüsü sayesinde, arama derinliği arttıkça algoritma öğretmen boşluklarını kapatmak ve tek kalan dersleri birleştirmek için daha fazla yer değiştirme ve swap denemesi yapabilir.
-                                </span>
-                              </div>
-                            </div>
+                              <button
+                                type="button"
+                                onClick={() => optimizeGapsForAllTeachers()}
+                                className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-teal-100 cursor-pointer"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                Tüm Öğretmenlerin Boşluğunu Azalt
+                              </button>
 
-                            {/* Ek Algoritma Optimizasyonları */}
-                            <div className="col-span-1 md:col-span-3 border-t border-slate-100 pt-3 flex flex-col gap-2">
-                              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                                <Sparkles className="w-4 h-4 text-amber-500" />
-                                Ek Algoritma Optimizasyon ve Düzeltme Araçları:
-                              </span>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (scheduleViewMode === "teacher" && viewingEntityId) {
-                                      optimizeGapsForTeacher(viewingEntityId);
-                                    } else {
-                                      showToast("Seçili öğretmenin boşluğunu azaltmak için lütfen önce Ders Programı tablosunda bir öğretmeni seçin.", "info");
-                                    }
-                                  }}
-                                  className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-100 cursor-pointer"
-                                >
-                                  <UserCheck className="w-3.5 h-3.5" />
-                                  Seçili Öğretmenin Boşluğunu Azalt
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => optimizeGapsForAllTeachers()}
-                                  className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-teal-100 cursor-pointer"
-                                >
-                                  <Users className="w-3.5 h-3.5" />
-                                  Tüm Öğretmenlerin Boşluğunu Azalt
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => removeSingleLessonDays()}
-                                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-100 cursor-pointer"
-                                >
-                                  <CalendarDays className="w-3.5 h-3.5" />
-                                  Öğretmenin Tek Dersini Kaldır
-                                </button>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                                Bu işlemler mevcut ders dağılımlarını ve derslerin tamamlanış durumunu bozmadan (boş olan uygun saatlere kaydırarak) programı daha kompakt hale getirir. Herhangi bir çakışmaya izin verilmez.
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeSingleLessonDays()}
+                                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-100 cursor-pointer"
+                              >
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                Öğretmenin Tek Dersini Kaldır
+                              </button>
                             </div>
                           </div>
                         </motion.div>
@@ -3329,243 +3392,6 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
 
                   </div>
 
-                  {/* Akıllı Çakışma Analiz Paneli */}
-                  {(() => {
-                    const entityAssignedHours = (() => {
-                      if (!viewingEntityId) return totalAssignedHours;
-                      if (scheduleViewMode === "class") {
-                        return state.assignments.filter(a => a.classId === viewingEntityId).reduce((sum, a) => sum + a.weeklyHours, 0);
-                      } else if (scheduleViewMode === "teacher") {
-                        return state.assignments.filter(a => a.teacherId && a.teacherId.split(",").includes(viewingEntityId)).reduce((sum, a) => sum + a.weeklyHours, 0);
-                      } else if (scheduleViewMode === "classroom") {
-                        return state.assignments.filter(a => a.classroomId === viewingEntityId).reduce((sum, a) => sum + a.weeklyHours, 0);
-                      }
-                      return totalAssignedHours;
-                    })();
-
-                    const entityPlacedHours = (() => {
-                      if (!viewingEntityId) return totalPlacedHours;
-                      let count = 0;
-                      Object.keys(state.schedule).forEach((cId) => {
-                        const classSched = state.schedule[cId];
-                        if (classSched) {
-                          Object.keys(classSched).forEach((dayIdxKey) => {
-                            const periods = classSched[parseInt(dayIdxKey, 10)];
-                            if (periods) {
-                              periods.forEach((slot) => {
-                                if (slot) {
-                                  if (scheduleViewMode === "class" && cId === viewingEntityId) {
-                                    count++;
-                                  } else if (scheduleViewMode === "teacher" && slot.teacherId && slot.teacherId.split(",").includes(viewingEntityId)) {
-                                    count++;
-                                  } else if (scheduleViewMode === "classroom" && slot.classroomId === viewingEntityId) {
-                                    count++;
-                                  }
-                                }
-                              });
-                            }
-                          });
-                        }
-                      });
-                      return count;
-                    })();
-
-                    const entityConflicts = activeConflicts.filter((conf) => {
-                      if (!viewingEntityId) return true;
-                      if (scheduleViewMode === "class") {
-                        return conf.details.classId === viewingEntityId;
-                      } else if (scheduleViewMode === "teacher") {
-                        return conf.details.teacherId === viewingEntityId;
-                      } else if (scheduleViewMode === "classroom") {
-                        return conf.details.classroomId === viewingEntityId;
-                      }
-                      return true;
-                    });
-
-                    const entityUnplacedReports = unplacedReports.filter((item) => {
-                      if (!viewingEntityId) return true;
-                      if (scheduleViewMode === "class") {
-                        return item.classId === viewingEntityId;
-                      } else if (scheduleViewMode === "teacher") {
-                        if (!item.teacherId) return false;
-                        return item.teacherId.split(",").includes(viewingEntityId);
-                      } else if (scheduleViewMode === "classroom") {
-                        const assign = state.assignments.find(a => a.id === item.assignmentId);
-                        return assign?.classroomId === viewingEntityId;
-                      }
-                      return true;
-                    });
-
-                    const isAllPlacedNoConflicts = entityPlacedHours === entityAssignedHours && entityConflicts.length === 0 && entityUnplacedReports.length === 0;
-
-                    return (
-                      <div className="mt-4 shrink-0 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm text-left">
-                        <button
-                          onClick={() => setIsAnalysisOpen(!isAnalysisOpen)}
-                          disabled={isAllPlacedNoConflicts}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                            isAllPlacedNoConflicts
-                              ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
-                              : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Activity className="w-4 h-4 text-blue-500 animate-pulse" />
-                            <span>Akıllı Çakışma & Hata Analiz Paneli</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            {isAllPlacedNoConflicts ? (
-                              <span className="text-[9px] bg-slate-200/60 text-slate-500 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">ANALİZ GEREKSİZ</span>
-                            ) : (
-                              <span className="text-[9px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">SORUNLARI ANALİZ ET</span>
-                            )}
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isAnalysisOpen ? "rotate-180" : ""}`} />
-                          </div>
-                        </button>
-
-                        <AnimatePresence>
-                          {isAnalysisOpen && !isAllPlacedNoConflicts && (() => {
-                            return (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-3.5 shadow-inner overflow-hidden"
-                              >
-                                {(() => {
-                                  const unifiedConflicts = (() => {
-                                    const list: {
-                                      id: string;
-                                      problem: string;
-                                      suggestion: string;
-                                      action: any | null;
-                                    }[] = [];
-
-                                    const smartSuggestions = getSmartAutoFixSuggestions();
-
-                                    entityConflicts.forEach((c, idx) => {
-                                      const d = c.dayIndex;
-                                      const p = c.periodIndex;
-                                      const dayName = state.settings.days[d] || `${d + 1}. Gün`;
-                                      const periodName = `${p + 1}. Saat`;
-
-                                      let problem = "";
-                                      if (c.type === "teacher_overlap") {
-                                        const teacherObj = state.teachers.find(t => t.id === c.details.teacherId);
-                                        const tName = teacherObj?.name || "Bilinmeyen Öğretmen";
-                                        problem = `${tName} öğretmeni ${dayName} günü ${periodName} diliminde çakışıyor (Aynı saatte birden fazla sınıfa atanmış).`;
-                                      } else if (c.type === "classroom_overlap") {
-                                        const roomObj = state.classrooms.find(r => r.id === c.details.classroomId);
-                                        const rName = roomObj?.name || "Bilinmeyen Atölye";
-                                        problem = `${rName} atölyesi/laboratuvarı ${dayName} günü ${periodName} diliminde birden fazla ders için ayrılmış.`;
-                                      } else {
-                                        const classObj = state.classes.find(cl => cl.id === c.details.classId);
-                                        const tObj = state.teachers.find(t => t.id === c.details.teacherId);
-                                        const entName = classObj?.name || tObj?.name || "Bilinmeyen Kaynak";
-                                        problem = `${entName} için ${dayName} günü ${periodName} kilitli (kapalı) olmasına rağmen ders yerleştirilmiş.`;
-                                      }
-
-                                      // Find corresponding auto-fix suggestion
-                                      const matchingSug = smartSuggestions.find(sug => 
-                                        sug.action.fromDay === d && 
-                                        sug.action.fromPeriod === p
-                                      );
-
-                                      let suggestion = "";
-                                      let action = null;
-
-                                      if (matchingSug) {
-                                        suggestion = matchingSug.message;
-                                        action = matchingSug.action;
-                                      } else {
-                                        if (c.type === "teacher_overlap") {
-                                          suggestion = "Öğretmen çakışmasını düzeltmek için, çakışan derslerden birini fareyle sürükleyip boş bir güne/saate taşıyın.";
-                                        } else if (c.type === "classroom_overlap") {
-                                          suggestion = "Atölye çakışmasını çözmek için atölyeyi paylaşan derslerden birini başka bir dersliğe aktarın veya farklı bir saat dilimine sürükleyin.";
-                                        } else {
-                                          suggestion = "Kilitli zaman dilimi çakışmasını çözmek için dersi başka bir saate taşıyın veya o günün kilidini F2 tuşuyla kaldırın.";
-                                        }
-                                      }
-
-                                      list.push({
-                                        id: `unified-conflict-${idx}-${d}-${p}`,
-                                        problem,
-                                        suggestion,
-                                        action
-                                      });
-                                    });
-
-                                    return list;
-                                  })();
-
-                                  if (unifiedConflicts.length === 0) return null;
-
-                                  return (
-                                    <div className="space-y-3.5">
-                                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Tespit Edilen Çakışmalar ve Çözüm Önerileri ({unifiedConflicts.length})</h4>
-                                      <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
-                                        {unifiedConflicts.map((item) => (
-                                          <div key={item.id} className="p-3 bg-white border border-slate-200/80 rounded-xl shadow-sm flex flex-col gap-2">
-                                            <div className="flex items-start gap-1.5">
-                                              <span className="text-red-500 mt-0.5 shrink-0 text-xs">⚠️</span>
-                                              <span className="text-[11px] font-bold text-slate-800 leading-normal">
-                                                {item.problem}
-                                              </span>
-                                            </div>
-                                            <div className="p-2.5 bg-blue-50/50 border border-blue-100/40 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                              <div className="flex items-start gap-1.5">
-                                                <span className="text-blue-600 shrink-0">💡</span>
-                                                <span className="text-[10.5px] font-semibold text-blue-900 leading-relaxed">
-                                                  {item.suggestion}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {entityUnplacedReports.length > 0 && (
-                                  <div className="pt-3 border-t border-slate-200/60 space-y-2">
-                                    <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-wider mb-2">Otomatik Dağıtım Analiz Raporu ({entityUnplacedReports.length} Sorun)</h4>
-                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                                      {entityUnplacedReports.map((item, i) => (
-                                        <div key={item.id || i} className="p-3 bg-rose-50/40 border border-rose-100 rounded-xl space-y-2.5">
-                                          <div className="flex justify-between items-start">
-                                            <div>
-                                              <span className="font-bold text-slate-800 text-xs block">{item.className} - {item.courseName}</span>
-                                              <span className="text-[10px] text-slate-500 font-semibold">Öğretmen: {item.teacherName} | Blok: {item.size} Saat</span>
-                                            </div>
-                                            <span className="bg-rose-100 text-rose-800 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">YERLEŞMEDİ</span>
-                                          </div>
-                                          
-                                          <p className="text-[10px] text-rose-900 leading-normal font-bold bg-white p-2 rounded-lg border border-rose-100/60 shadow-sm">
-                                            {item.reason}
-                                          </p>
-
-                                          <div className="space-y-1.5">
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Önerilen Çözüm Adımları:</span>
-                                            {item.suggestions.map((sug: any, sIdx: number) => (
-                                              <div key={sIdx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-100 shadow-sm hover:border-blue-300 transition-colors">
-                                                <span className="text-[10px] font-bold text-slate-700 leading-relaxed">{sug.text}</span>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </motion.div>
-                            );
-                          })()}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })()}
-
                 </div>
 
                 {/* Real-time cell edit popover modal */}
@@ -4074,6 +3900,30 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                     </div>
                   </div>
 
+                  {/* Algoritma ve Optimizasyon Bilgileri (Öneri 1, 2, 3, 4) */}
+                  <div className="bg-blue-50/50 rounded-xl p-3.5 border border-blue-100 space-y-2">
+                    <span className="text-[10px] font-extrabold text-blue-800 block uppercase tracking-wider">Planlama Motoru Teknolojileri (Öneri 1, 2, 3 & 4)</span>
+                    
+                    <div className="space-y-2 text-[9px] text-slate-600 font-semibold leading-relaxed">
+                      <div>
+                        <span className="text-blue-700 font-bold block">Öneri 1: İleri Görüşlü Fizibilite Filtresi</span>
+                        Boşa düşen bir dersin yerleşebileceği en az 1 teorik boş veya kilitlenmemiş alternatif alan olduğunu önceden test eder ve programı korur.
+                      </div>
+                      <div className="pt-1.5 border-t border-slate-200/50">
+                        <span className="text-blue-700 font-bold block">Öneri 2: Akıllı Net Kazanç Koruması</span>
+                        Yeni bir ders yerleştirirken zincirleme bozulmaları engeller. Atama başına boşa çıkan ders sayısını otomatik limitler.
+                      </div>
+                      <div className="pt-1.5 border-t border-slate-200/50">
+                        <span className="text-blue-700 font-bold block">Öneri 3: Esnek Öğretmen Boşluk Optimizasyonu</span>
+                        Öğretmenlerin gün içi pencerelerini (Gap) Simulated Annealing ve Tabu Search ile minimize eder. Derslerin çakışmadan yerleşebilmesi için pencereler esnektir.
+                      </div>
+                      <div className="pt-1.5 border-t border-slate-200/50">
+                        <span className="text-blue-700 font-bold block">Öneri 4: Rekürsif Çok Seviyeli Zincir Kaydırma Motoru</span>
+                        Çakışma anında, çakışan dersi başka bir saate, o saatteki dersi ise başka bir öğretmenin boşluğuna kaydırarak 4 derinliğe kadar tüm okul çapında zincirleme (cascading) bir kaydırma dalgası başlatır. En başta aynı sınıfın öğretmenleri, ardından komşu öğretmenler taranarak tüm öğretmen kadrosu sürece dahil edilir.
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end pt-1 gap-2">
                     <button
                       onClick={() => setIsSchedulingOptionsOpen(false)}
@@ -4233,56 +4083,143 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
-                            {filtered.map((teacher) => {
-                              const isUnavailable = teacher.unavailability[teacherStatusDialog.dIdx]?.[teacherStatusDialog.pIdx] === true;
-                              const closureLabel = teacher.closureNames?.[teacherStatusDialog.dIdx]?.[teacherStatusDialog.pIdx];
-                              
-                              let teachingInClass = "";
-                              let teachingCourseName = "";
-                              for (const cId of Object.keys(state.schedule)) {
-                                const s = state.schedule[cId]?.[teacherStatusDialog.dIdx]?.[teacherStatusDialog.pIdx];
-                                if (s && s.teacherId && s.teacherId.split(",").includes(teacher.id)) {
-                                  teachingInClass = classesMap.get(cId)?.name || cId;
-                                  teachingCourseName = coursesMap.get(s.courseId)?.name || "Ders";
-                                  break;
+                            {(() => {
+                              const isRealLessonSlot = (slot: any) => {
+                                if (!slot) return false;
+                                const course = state.courses.find(c => c.id === slot.courseId);
+                                if (!course) return false;
+                                return !isChefOrCoordinatorCourse(course.name, course.code);
+                              };
+
+                              const getTeacherStatus = (teacher: Teacher) => {
+                                const dIdx = teacherStatusDialog.dIdx;
+                                const pIdx = teacherStatusDialog.pIdx;
+
+                                const isUnavailable = teacher.unavailability[dIdx]?.[pIdx] === true;
+                                const closureLabel = teacher.closureNames?.[dIdx]?.[pIdx];
+
+                                // 1. Check if teaching right now
+                                let teachingInClass = "";
+                                let teachingCourseName = "";
+                                for (const cId of Object.keys(state.schedule)) {
+                                  const s = state.schedule[cId]?.[dIdx]?.[pIdx];
+                                  if (s && s.teacherId && s.teacherId.split(",").includes(teacher.id)) {
+                                    teachingInClass = classesMap.get(cId)?.name || cId;
+                                    teachingCourseName = coursesMap.get(s.courseId)?.name || "Ders";
+                                    break;
+                                  }
                                 }
-                              }
 
-                              let statusBadge = null;
-                              if (isUnavailable) {
-                                statusBadge = (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-full text-[10px] font-extrabold border border-rose-100">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                                    <span>Bu derste kapalı {closureLabel ? `(${closureLabel})` : ""}</span>
-                                  </span>
-                                );
-                              } else if (teachingInClass) {
-                                statusBadge = (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold border border-amber-100">
-                                    <span>Derste ({teachingInClass} - {teachingCourseName})</span>
-                                  </span>
-                                );
-                              } else {
-                                statusBadge = (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black border border-emerald-100">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    <span>Okulda ve Boşta</span>
-                                  </span>
-                                );
-                              }
+                                // 2. Find all real lessons for this teacher on this day
+                                const lessonsToday: number[] = [];
+                                Object.keys(state.schedule).forEach((cId) => {
+                                  const daySchedule = state.schedule[cId]?.[dIdx];
+                                  if (daySchedule) {
+                                    daySchedule.forEach((slot, periodIdx) => {
+                                      if (slot && slot.teacherId && slot.teacherId.split(",").includes(teacher.id) && isRealLessonSlot(slot)) {
+                                        lessonsToday.push(periodIdx);
+                                      }
+                                    });
+                                  }
+                                });
 
-                              return (
+                                if (lessonsToday.length === 0) {
+                                  return {
+                                    priority: 5,
+                                    badge: (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-500 rounded-full text-[10px] font-medium border border-slate-200/60">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                        <span>Bugün Dersi Yok</span>
+                                      </span>
+                                    )
+                                  };
+                                }
+
+                                if (teachingInClass) {
+                                  return {
+                                    priority: 3,
+                                    badge: (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold border border-amber-100">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        <span>Derste ({teachingInClass} - {teachingCourseName})</span>
+                                      </span>
+                                    )
+                                  };
+                                }
+
+                                if (isUnavailable) {
+                                  return {
+                                    priority: 6,
+                                    badge: (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-[10px] font-semibold border border-slate-200">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        <span>Bu derste kapalı {closureLabel ? `(${closureLabel})` : ""}</span>
+                                      </span>
+                                    )
+                                  };
+                                }
+
+                                const firstLesson = Math.min(...lessonsToday);
+                                const lastLesson = Math.max(...lessonsToday);
+
+                                if (pIdx < firstLesson) {
+                                  return {
+                                    priority: 1,
+                                    badge: (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[10px] font-bold border border-indigo-100">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                                        <span>Henüz Dersi Başlamadı</span>
+                                      </span>
+                                    )
+                                  };
+                                }
+
+                                if (pIdx > lastLesson) {
+                                  return {
+                                    priority: 4,
+                                    badge: (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-full text-[10px] font-bold border border-rose-100">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                        <span>Dersi Bitti</span>
+                                      </span>
+                                    )
+                                  };
+                                }
+
+                                return {
+                                  priority: 2,
+                                  badge: (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black border border-emerald-100">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                      <span>Okulda ve Boşta (Aktif)</span>
+                                    </span>
+                                  )
+                                };
+                              };
+
+                              const teachersWithStatus = filtered.map((teacher) => {
+                                return { teacher, status: getTeacherStatus(teacher) };
+                              });
+
+                              const sortedTeachers = teachersWithStatus.sort((a, b) => {
+                                if (a.status.priority !== b.status.priority) {
+                                  return a.status.priority - b.status.priority;
+                                }
+                                return a.teacher.name.localeCompare(b.teacher.name, "tr-TR");
+                              });
+
+                              return sortedTeachers.map(({ teacher, status }) => (
                                 <tr key={teacher.id} className="hover:bg-slate-50/50 transition-colors">
                                   <td className="py-2.5 px-3">
                                     <div className="font-bold text-slate-800">{teacher.name}</div>
                                     <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{teacher.branch}</div>
                                   </td>
                                   <td className="py-2.5 px-3 text-right">
-                                    {statusBadge}
+                                    {status.badge}
                                   </td>
                                 </tr>
-                              );
-                            })}
+                              ));
+                            })()}
                           </tbody>
                         </table>
                       </div>

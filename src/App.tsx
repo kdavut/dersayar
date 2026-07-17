@@ -45,7 +45,10 @@ import {
   Sparkles,
   HelpCircle,
   Database,
-  LogOut
+  LogOut,
+  CloudAlert,
+  CloudCheck,
+  CloudUpload
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1216,6 +1219,12 @@ export default function App() {
     });
   };
 
+  const handleUpdateAcademicYear = (year: string) => {
+    updateState((draft) => {
+      draft.settings.academicYear = year;
+    });
+  };
+
   const handleUpdateEffectiveDate = (date: string) => {
     updateState((draft) => {
       draft.settings.effectiveDate = date;
@@ -1237,16 +1246,6 @@ export default function App() {
   const handleUpdateLunchBreakDuration = (duration: number) => {
     updateState((draft) => {
       draft.settings.lunchBreakDuration = duration;
-    });
-  };
-
-  const handleUpdateSchoolSettings = (key: "groupLessonsMode" | "maxTeacherDailyGaps", value: any) => {
-    updateState((draft) => {
-      if (key === "groupLessonsMode") {
-        draft.settings.groupLessonsMode = value;
-      } else if (key === "maxTeacherDailyGaps") {
-        draft.settings.maxTeacherDailyGaps = value;
-      }
     });
   };
 
@@ -1442,7 +1441,7 @@ export default function App() {
         if (teacher) {
           teacher.name = newTeacher.name;
           teacher.branch = newTeacher.branch;
-          teacher.shortName = newTeacher.shortName.trim().toUpperCase();
+          teacher.shortName = newTeacher.shortName.trim().toLocaleUpperCase("tr-TR");
           teacher.homeroomClass = newTeacher.homeroomClass.trim();
         }
         setEditingTeacherId(null);
@@ -1454,7 +1453,7 @@ export default function App() {
           id,
           name: newTeacher.name,
           branch: newTeacher.branch,
-          shortName: newTeacher.shortName.trim().toUpperCase() || undefined,
+          shortName: newTeacher.shortName.trim().toLocaleUpperCase("tr-TR") || undefined,
           homeroomClass: newTeacher.homeroomClass.trim() || undefined,
           unavailability: createEmptyUnavailability(draft.settings.days.length, draft.settings.periodsPerDay)
         };
@@ -1641,7 +1640,7 @@ export default function App() {
         const item = draft.classrooms.find((cr) => cr.id === editingClassroomId);
         if (item) {
           item.name = newClassroom.name;
-          item.shortName = newClassroom.shortName.toUpperCase();
+          item.shortName = newClassroom.shortName.toLocaleUpperCase("tr-TR");
         }
         setEditingClassroomId(null);
         showToast("Atölye güncellendi.", "success");
@@ -1650,7 +1649,7 @@ export default function App() {
         const item: Classroom = {
           id,
           name: newClassroom.name,
-          shortName: newClassroom.shortName.toUpperCase(),
+          shortName: newClassroom.shortName.toLocaleUpperCase("tr-TR"),
           type: "workshop" as const,
           unavailability: createEmptyUnavailability(draft.settings.days.length, draft.settings.periodsPerDay)
         };
@@ -1744,7 +1743,7 @@ export default function App() {
         const item = draft.courses.find((c) => c.id === editingCourseId);
         if (item) {
           item.name = newCourse.name;
-          item.code = newCourse.code.toUpperCase();
+          item.code = newCourse.code.toLocaleUpperCase("tr-TR");
           item.weeklyHours = weeklyHoursNum;
           item.placementMode = cleanPlacement;
         }
@@ -1755,7 +1754,7 @@ export default function App() {
         const item: Course = {
           id,
           name: newCourse.name,
-          code: newCourse.code.toUpperCase(),
+          code: newCourse.code.toLocaleUpperCase("tr-TR"),
           weeklyHours: weeklyHoursNum,
           placementMode: cleanPlacement
         };
@@ -2204,21 +2203,37 @@ export default function App() {
           </div>
 
           {/* Sync warning and pulsing button */}
-          <div className="flex flex-col items-end">
+          <div className="flex items-center">
             {!isSynced ? (
-              <>
+              <div className="flex items-center gap-2">
+                {/* Warning message - visible on tablets/desktops */}
+                <span className="hidden lg:inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 animate-pulse bg-rose-950/40 px-3 py-1.5 rounded-xl border border-rose-800/40 shadow-inner">
+                  <CloudAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span>Şu anda buluta kaydedilmemiş veriler var</span>
+                </span>
+                
+                {/* Eye-catching wider Red Button with LED neon trace border and glow */}
                 <button
                   onClick={saveToCloud}
-                  className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-lg shadow-rose-950/40 ring-1 ring-rose-400/50 transition-all cursor-pointer"
+                  className="red-led-btn-container group flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-lg shadow-rose-950/60 transition-all cursor-pointer animate-pulse-glow-rose min-w-[130px]"
                 >
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping shrink-0"></div>
-                  <span>KAYDET</span>
+                  {/* LED trace lines */}
+                  <span className="red-led-line red-led-line-top"></span>
+                  <span className="red-led-line red-led-line-right"></span>
+                  <span className="red-led-line red-led-line-bottom"></span>
+                  <span className="red-led-line red-led-line-left"></span>
+                  
+                  <CloudUpload className="w-4 h-4 animate-bounce shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="tracking-wide">BULUTA KAYDET</span>
                 </button>
-              </>
+              </div>
             ) : (
-              <div className="flex items-center gap-1.5 bg-emerald-950/40 text-emerald-300 border border-emerald-800/60 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0 animate-pulse"></div>
-                <span>Senkronize</span>
+              <div className="flex items-center">
+                {/* Wide green saved badge */}
+                <div className="flex items-center gap-1.5 bg-emerald-950/50 text-emerald-300 border border-emerald-800/50 px-4 py-2 rounded-xl text-xs font-black shadow-inner">
+                  <CloudCheck className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
+                  <span>Bulut'a Kaydedildi</span>
+                </div>
               </div>
             )}
           </div>
@@ -2576,6 +2591,7 @@ export default function App() {
                 state={state}
                 handleUpdateSchoolName={handleUpdateSchoolName}
                 handleUpdatePrincipalName={handleUpdatePrincipalName}
+                handleUpdateAcademicYear={handleUpdateAcademicYear}
                 handleToggleDay={handleToggleDay}
                 handleUpdatePeriodsCount={handleUpdatePeriodsCount}
                 handleUpdateLunchBreakAfter={handleUpdateLunchBreakAfter}
@@ -2685,6 +2701,7 @@ export default function App() {
               const { type, ids } = activePrintJob;
               const numDays = state.settings.days.length;
               const numPeriods = state.settings.periodsPerDay;
+              const zebraColors = ["#FFF5EE", "#F0F8FF", "#F0FFF0", "#FFFFE0", "#E6E6FA"];
 
               // Helper to get day name
               const getDayName = (dIdx: number) => state.settings.days[dIdx] || "";
@@ -2694,7 +2711,7 @@ export default function App() {
                 const parts = name.trim().split(/\s+/);
                 if (parts.length <= 1) return name;
                 const lastName = parts[parts.length - 1];
-                const initials = parts.slice(0, -1).map(p => p[0].toUpperCase() + ".").join(" ");
+                const initials = parts.slice(0, -1).map(p => p[0].toLocaleUpperCase("tr-TR") + ".").join(" ");
                 return `${initials} ${lastName}`;
               };
 
@@ -2708,17 +2725,19 @@ export default function App() {
                   const grid = getTeacherWeeklySchedule(tId);
 
                   return (
-                    <div key={tId} className="print-page flex flex-col justify-between" style={{ minHeight: "240mm" }}>
+                    <div key={tId} className="print-page flex flex-col justify-between">
                       <div>
                         {/* Official header */}
-                        <div className="official-header uppercase">
-                          <div>T.C.</div>
-                          <div className="mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                          <div className="text-xs font-semibold mt-2 tracking-wide text-slate-600">HAFTALIK DERS PROGRAMI TEBLİĞ BELGESİ</div>
+                        <div className="official-header uppercase text-center mb-4">
+                          <div className="text-xs font-bold">T.C.</div>
+                          <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                          <div className="text-xs font-bold mt-1 tracking-wide">
+                            {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                          </div>
                         </div>
 
                         {/* Official Meta Info */}
-                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-4 font-mono text-xs">
+                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-2 font-mono text-xs">
                           <div className="space-y-1">
                             <div><strong>Sayı:</strong> {printDocNo || "Belirtilmedi"}</div>
                             <div><strong>Konu:</strong> {printDocSubject || "Belirtilmedi"}</div>
@@ -2730,7 +2749,7 @@ export default function App() {
                         </div>
 
                         {/* Short Sade Resmi Tebliğ Yazısı */}
-                        <div className="official-text mt-4 text-justify">
+                        <div className="official-text mt-2.5 text-justify">
                           Sayın <strong>{teacher.name}</strong> ({teacher.branch || "Öğretmen"}),
                           <br /><br />
                           {state.settings.effectiveDate ? <strong>{new Date(state.settings.effectiveDate).toLocaleDateString('tr-TR')}</strong> : "Belirtilen"} tarihinden itibaren geçerli olmak üzere ders yükünüz ve haftalık ders programınız aşağıda belirtilmiştir. Bilgilerinizi, tebliğ edilen program doğrultusunda ders görevlerinizi yerine getirmenizi ve gereğini tebliğen rica ederim.
@@ -2751,54 +2770,66 @@ export default function App() {
                               const periodTime = state.settings.periodTimes?.[pIdx];
                               const timeStr = periodTime ? `${periodTime.start} - ${periodTime.end}` : "";
                               return (
-                                <tr key={pIdx}>
-                                  <td className="font-bold">
-                                    <div className="font-black">{pIdx + 1}. Ders</div>
-                                    <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
-                                  </td>
-                                  {state.settings.days.map((_, dIdx) => {
-                                    const teacherSlots = grid[dIdx][pIdx]; // Array of { slot, classId }
-                                    const isLocked = teacher.unavailability?.[dIdx]?.[pIdx];
-                                    const closureName = teacher.closureNames?.[dIdx]?.[pIdx] || "";
-                                    const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                <React.Fragment key={pIdx}>
+                                  <tr>
+                                    <td className="font-bold">
+                                      <div className="font-black">{pIdx + 1}. Ders</div>
+                                      <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
+                                    </td>
+                                    {state.settings.days.map((_, dIdx) => {
+                                      const teacherSlots = grid[dIdx][pIdx]; // Array of { slot, classId }
+                                      const isLocked = teacher.unavailability?.[dIdx]?.[pIdx];
+                                      const closureName = teacher.closureNames?.[dIdx]?.[pIdx] || "";
+                                      const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
 
-                                    if (isLocked) {
-                                      if (isSpecialClosure) {
+                                      if (isLocked) {
+                                        if (isSpecialClosure) {
+                                          return (
+                                            <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
+                                              {closureName}
+                                            </td>
+                                          );
+                                        }
                                         return (
-                                          <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
-                                            {closureName}
-                                          </td>
+                                          <td key={dIdx}></td>
                                         );
                                       }
+
+                                      if (!teacherSlots || teacherSlots.length === 0) {
+                                        return <td key={dIdx}></td>;
+                                      }
+
                                       return (
-                                        <td key={dIdx}></td>
+                                        <td key={dIdx} className="p-1">
+                                          {teacherSlots.map((ts, index) => {
+                                            const course = coursesMap.get(ts.slot.courseId);
+                                            const classObj = classesMap.get(ts.classId);
+                                            const roomObj = ts.slot.classroomId ? classroomsMap.get(ts.slot.classroomId) : null;
+                                            return (
+                                              <div key={index} className="leading-tight py-0.5">
+                                                <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight">{classObj?.name || "Sınıf"}</div>
+                                                <div className="font-bold text-blue-700 text-[8px] mt-0.5 leading-tight truncate" title={course?.name || course?.code || "Ders"}>{course?.code || course?.name || "Ders"}</div>
+                                                {roomObj && (
+                                                  <div className="text-[7.5px] font-medium text-purple-600 mt-0.5 leading-tight">🛠️ {roomObj.shortName || roomObj.name}</div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </td>
                                       );
-                                    }
-
-                                    if (!teacherSlots || teacherSlots.length === 0) {
-                                      return <td key={dIdx}></td>;
-                                    }
-
-                                    return (
-                                      <td key={dIdx} className="p-1">
-                                        {teacherSlots.map((ts, index) => {
-                                          const course = coursesMap.get(ts.slot.courseId);
-                                          const classObj = classesMap.get(ts.classId);
-                                          const roomObj = ts.slot.classroomId ? classroomsMap.get(ts.slot.classroomId) : null;
-                                          return (
-                                            <div key={index} className="leading-tight py-0.5">
-                                              <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight">{classObj?.name || "Sınıf"}</div>
-                                              <div className="font-bold text-blue-700 text-[8px] mt-0.5 leading-tight">{course?.code || course?.name || "Ders"}</div>
-                                              {roomObj && (
-                                                <div className="text-[7.5px] font-medium text-purple-600 mt-0.5 leading-tight">🛠️ {roomObj.shortName || roomObj.name}</div>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
+                                    })}
+                                  </tr>
+                                  {state.settings.lunchBreakAfter && state.settings.lunchBreakAfter > 0 && state.settings.lunchBreakAfter === pIdx + 1 && (
+                                    <tr key={`lunch-${pIdx}`} style={{ height: "14px", backgroundColor: "#f8fafc" }}>
+                                      <td style={{ padding: "2px", fontSize: "7px", fontWeight: "bold", backgroundColor: "#cbd5e1" }}>
+                                        Öğle Arası
                                       </td>
-                                    );
-                                  })}
-                                </tr>
+                                      <td colSpan={numDays} style={{ padding: "2px", fontSize: "7.5px", fontWeight: "extrabold", backgroundColor: "#f8fafc", color: "#475569" }}>
+                                        ÖĞLE ARASI
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>
@@ -2814,18 +2845,18 @@ export default function App() {
                           if (teacherAssignments.length === 0) return null;
 
                           return (
-                            <div className="mt-5 border-t border-slate-300 pt-3">
-                              <h4 className="text-[9px] font-black uppercase text-slate-800 tracking-wider mb-1.5 text-center">
+                            <div className="mt-2.5 border-t border-slate-300 pt-1.5">
+                              <h4 className="text-[9px] font-black uppercase text-slate-800 tracking-wider mb-1 text-center">
                                 GİRDİĞİ SINIFLAR VE HAFTALIK DERS SAATLERİ (HDS) İSTATİSTİKLERİ
                               </h4>
-                              <table className="print-table" style={{ marginTop: "2px", width: "100%" }}>
+                              <table className="print-table" style={{ marginTop: "1px", width: "100%" }}>
                                 <thead>
                                   <tr>
-                                    <th style={{ width: "8%", fontSize: "8.5px", padding: "3px 2px" }}>S.No</th>
-                                    <th style={{ width: "25%", fontSize: "8.5px", padding: "3px 2px", textAlign: "left" }}>Sınıf</th>
-                                    <th style={{ width: "15%", fontSize: "8.5px", padding: "3px 2px" }}>Ders Kodu</th>
-                                    <th style={{ width: "42%", fontSize: "8.5px", padding: "3px 2px", textAlign: "left" }}>Ders Adı</th>
-                                    <th style={{ width: "10%", fontSize: "8.5px", padding: "3px 2px" }}>HDS</th>
+                                    <th style={{ width: "8%", fontSize: "8px", padding: "1.5px 1px" }}>S.No</th>
+                                    <th style={{ width: "25%", fontSize: "8px", padding: "1.5px 1px", textAlign: "left" }}>Sınıf</th>
+                                    <th style={{ width: "15%", fontSize: "8px", padding: "1.5px 1px" }}>Ders Kodu</th>
+                                    <th style={{ width: "42%", fontSize: "8px", padding: "1.5px 1px", textAlign: "left" }}>Ders Adı</th>
+                                    <th style={{ width: "10%", fontSize: "8px", padding: "1.5px 1px" }}>HDS</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -2834,18 +2865,18 @@ export default function App() {
                                     const classObj = classesMap.get(a.classId);
                                     return (
                                       <tr key={a.id}>
-                                        <td style={{ fontSize: "8px", padding: "2px" }}>{index + 1}</td>
-                                        <td style={{ fontSize: "8px", padding: "2px", textAlign: "left" }} className="font-extrabold">{classObj?.name || "-"}</td>
-                                        <td style={{ fontSize: "8px", padding: "2px" }} className="font-bold">{course?.code || "-"}</td>
-                                        <td style={{ fontSize: "8px", padding: "2px", textAlign: "left" }}>{course?.name || "-"}</td>
-                                        <td style={{ fontSize: "8px", padding: "2px" }} className="font-bold">{a.weeklyHours}</td>
+                                        <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }}>{index + 1}</td>
+                                        <td style={{ fontSize: "7.5px", padding: "1px 1.5px", textAlign: "left" }} className="font-extrabold">{classObj?.name || "-"}</td>
+                                        <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }} className="font-bold">{course?.code || "-"}</td>
+                                        <td style={{ fontSize: "7.5px", padding: "1px 1.5px", textAlign: "left" }}>{course?.name || "-"}</td>
+                                        <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }} className="font-bold">{a.weeklyHours}</td>
                                       </tr>
                                     );
                                   })}
                                   {/* Total HDS row */}
                                   <tr className="font-extrabold bg-slate-50">
-                                    <td colSpan={4} style={{ textAlign: "right", fontSize: "8px", padding: "2px" }} className="pr-4 font-black">TOPLAM HAFTALIK DERS SAATİ:</td>
-                                    <td style={{ fontSize: "8px", padding: "2px" }} className="font-black">
+                                    <td colSpan={4} style={{ textAlign: "right", fontSize: "7.5px", padding: "1.5px" }} className="pr-4 font-black">TOPLAM HAFTALIK DERS SAATİ:</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1.5px" }} className="font-black">
                                       {teacherAssignments.reduce((acc, a) => acc + a.weeklyHours, 0)}
                                     </td>
                                   </tr>
@@ -2857,22 +2888,22 @@ export default function App() {
                       </div>
 
                       {/* Signature block with Tebliğ Eden & Tebellüğ Eden */}
-                      <div className="mt-4 pt-3 border-t border-slate-300 w-full">
+                      <div className="mt-2.5 pt-1.5 border-t border-slate-300 w-full">
                         <div className="grid grid-cols-2 gap-4 text-center">
                           {/* Tebellüğ Eden (Left) */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-extrabold text-slate-800 tracking-wider">TEBELLÜĞ EDEN</span>
-                            <span className="text-[10px] font-bold text-slate-700 mt-1.5">{teacher.name}</span>
-                            <span className="text-[9px] text-slate-500 font-semibold">{teacher.branch || "Öğretmen"}</span>
-                            <span className="text-[8px] font-mono text-slate-400 mt-5 border-b border-dashed border-slate-300 w-28 pb-0.5">Tarih / İmza</span>
+                            <span className="text-[9px] font-extrabold text-slate-800 tracking-wider">TEBELLÜĞ EDEN</span>
+                            <span className="text-[9px] font-bold text-slate-700 mt-0.5">{teacher.name}</span>
+                            <span className="text-[8.5px] text-slate-500 font-semibold">{teacher.branch || "Öğretmen"}</span>
+                            <span className="text-[7.5px] font-mono text-slate-400 mt-2 border-b border-dashed border-slate-300 w-28 pb-0.5">Tarih / İmza</span>
                           </div>
 
                           {/* Tebliğ Eden (Right) */}
                           <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-extrabold text-slate-800 tracking-wider">TEBLİĞ EDEN</span>
-                            <span className="text-[10px] font-bold text-slate-700 mt-1.5">{state.settings.principalName || "Okul Müdürü"}</span>
-                            <span className="text-[9px] text-slate-500 font-semibold">Okul Müdürü</span>
-                            <span className="text-[8px] font-mono text-slate-400 mt-5 border-b border-dashed border-slate-300 w-28 pb-0.5">İmza</span>
+                            <span className="text-[9px] font-extrabold text-slate-800 tracking-wider">TEBLİĞ EDEN</span>
+                            <span className="text-[9px] font-bold text-slate-700 mt-0.5">{state.settings.principalName || "Okul Müdürü"}</span>
+                            <span className="text-[8.5px] text-slate-500 font-semibold">Okul Müdürü</span>
+                            <span className="text-[7.5px] font-mono text-slate-400 mt-2 border-b border-dashed border-slate-300 w-28 pb-0.5">İmza</span>
                           </div>
                         </div>
                       </div>
@@ -2894,17 +2925,19 @@ export default function App() {
                   const classAssignments = state.assignments.filter(a => a.classId === cId);
 
                   return (
-                    <div key={cId} className="print-page flex flex-col justify-between" style={{ minHeight: "240mm" }}>
+                    <div key={cId} className="print-page flex flex-col justify-between">
                       <div>
                         {/* Official header */}
-                        <div className="official-header uppercase">
-                          <div>T.C.</div>
-                          <div className="mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                          <div className="text-xs font-semibold mt-2 tracking-wide text-slate-600">SINIF HAFTALIK DERS PROGRAMI ÇIKTISI</div>
+                        <div className="official-header uppercase text-center mb-4">
+                          <div className="text-xs font-bold">T.C.</div>
+                          <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                          <div className="text-xs font-bold mt-1 tracking-wide">
+                            {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                          </div>
                         </div>
 
                         {/* Official Meta Info */}
-                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-4 font-mono text-xs">
+                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-2 font-mono text-xs">
                           <div>
                             <div><strong>Sınıf:</strong> {classObj.name}</div>
                           </div>
@@ -2928,69 +2961,81 @@ export default function App() {
                               const periodTime = state.settings.periodTimes?.[pIdx];
                               const timeStr = periodTime ? `${periodTime.start} - ${periodTime.end}` : "";
                               return (
-                                <tr key={pIdx}>
-                                  <td className="font-bold">
-                                    <div className="font-black">{pIdx + 1}. Ders</div>
-                                    <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
-                                  </td>
-                                  {state.settings.days.map((_, dIdx) => {
-                                    const slot = grid[dIdx][pIdx];
-                                    const isLocked = classObj.unavailability?.[dIdx]?.[pIdx];
-                                    const closureName = classObj.closureNames?.[dIdx]?.[pIdx] || "";
-                                    const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                <React.Fragment key={pIdx}>
+                                  <tr>
+                                    <td className="font-bold">
+                                      <div className="font-black">{pIdx + 1}. Ders</div>
+                                      <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
+                                    </td>
+                                    {state.settings.days.map((_, dIdx) => {
+                                      const slot = grid[dIdx][pIdx];
+                                      const isLocked = classObj.unavailability?.[dIdx]?.[pIdx];
+                                      const closureName = classObj.closureNames?.[dIdx]?.[pIdx] || "";
+                                      const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
 
-                                    if (isLocked) {
-                                      if (isSpecialClosure) {
+                                      if (isLocked) {
+                                        if (isSpecialClosure) {
+                                          return (
+                                            <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
+                                              {closureName}
+                                            </td>
+                                          );
+                                        }
                                         return (
-                                          <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
-                                            {closureName}
-                                          </td>
+                                          <td key={dIdx}></td>
                                         );
                                       }
+
+                                      if (!slot) {
+                                        return <td key={dIdx}>-</td>;
+                                      }
+
+                                      const course = coursesMap.get(slot.courseId);
+                                      const assignedTeachers = slot.teacherId ? slot.teacherId.split(",").map(id => teachersMap.get(id)).filter(Boolean) : [];
+                                      const roomObj = slot.classroomId ? classroomsMap.get(slot.classroomId) : null;
+
                                       return (
-                                        <td key={dIdx}></td>
+                                        <td key={dIdx} className="p-1">
+                                          <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight truncate" title={course?.name || course?.code || "Ders"}>{course?.code || course?.name || "Ders"}</div>
+                                          <div className="text-[8px] font-semibold text-slate-600 mt-0.5 leading-tight">
+                                            {assignedTeachers.map(t => getAbbreviatedTeacherName(t?.name || "")).join(", ")}
+                                          </div>
+                                          {roomObj && (
+                                            <div className="text-[7.5px] font-medium text-purple-600 mt-0.5 leading-tight">🛠 {roomObj.shortName || roomObj.name}</div>
+                                          )}
+                                        </td>
                                       );
-                                    }
-
-                                    if (!slot) {
-                                      return <td key={dIdx}>-</td>;
-                                    }
-
-                                    const course = coursesMap.get(slot.courseId);
-                                    const assignedTeachers = slot.teacherId ? slot.teacherId.split(",").map(id => teachersMap.get(id)).filter(Boolean) : [];
-                                    const roomObj = slot.classroomId ? classroomsMap.get(slot.classroomId) : null;
-
-                                    return (
-                                      <td key={dIdx} className="p-1">
-                                        <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight">{course?.code || course?.name || "Ders"}</div>
-                                        <div className="text-[8px] font-semibold text-slate-600 mt-0.5 leading-tight">
-                                          {assignedTeachers.map(t => getAbbreviatedTeacherName(t?.name || "")).join(", ")}
-                                        </div>
-                                        {roomObj && (
-                                          <div className="text-[7.5px] font-medium text-purple-600 mt-0.5 leading-tight">🛠 {roomObj.shortName || roomObj.name}</div>
-                                        )}
+                                    })}
+                                  </tr>
+                                  {state.settings.lunchBreakAfter && state.settings.lunchBreakAfter > 0 && state.settings.lunchBreakAfter === pIdx + 1 && (
+                                    <tr key={`lunch-${pIdx}`} style={{ height: "14px", backgroundColor: "#f8fafc" }}>
+                                      <td style={{ padding: "2px", fontSize: "7px", fontWeight: "bold", backgroundColor: "#cbd5e1" }}>
+                                        Öğle Arası
                                       </td>
-                                    );
-                                  })}
-                                </tr>
+                                      <td colSpan={numDays} style={{ padding: "2px", fontSize: "7.5px", fontWeight: "extrabold", backgroundColor: "#f8fafc", color: "#475569" }}>
+                                        ÖĞLE ARASI
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>
                         </table>
 
                         {/* Class Teacher/Course Table Summary */}
-                        <div className="mt-5 border-t border-slate-300 pt-3">
-                          <h4 className="text-[9px] font-black uppercase text-slate-800 tracking-wider mb-1.5 text-center">
+                        <div className="mt-2.5 border-t border-slate-300 pt-1.5">
+                          <h4 className="text-[9px] font-black uppercase text-slate-800 tracking-wider mb-1 text-center">
                             DERSİ OKUTAN ÖĞRETMENLER VE HAFTALIK SAATLERİ (HDS)
                           </h4>
-                          <table className="print-table" style={{ marginTop: "2px", width: "100%" }}>
+                          <table className="print-table" style={{ marginTop: "1px", width: "100%" }}>
                             <thead>
                               <tr>
-                                <th style={{ width: "8%", fontSize: "8.5px", padding: "3px 2px" }}>S.No</th>
-                                <th style={{ width: "15%", fontSize: "8.5px", padding: "3px 2px" }}>Ders Kodu</th>
-                                <th style={{ width: "42%", fontSize: "8.5px", padding: "3px 2px", textAlign: "left" }}>Ders Adı</th>
-                                <th style={{ width: "25%", fontSize: "8.5px", padding: "3px 2px", textAlign: "left" }}>Öğretmen</th>
-                                <th style={{ width: "10%", fontSize: "8.5px", padding: "3px 2px" }}>HDS</th>
+                                <th style={{ width: "8%", fontSize: "8px", padding: "1.5px 1px" }}>S.No</th>
+                                <th style={{ width: "15%", fontSize: "8px", padding: "1.5px 1px" }}>Ders Kodu</th>
+                                <th style={{ width: "42%", fontSize: "8px", padding: "1.5px 1px", textAlign: "left" }}>Ders Adı</th>
+                                <th style={{ width: "25%", fontSize: "8px", padding: "1.5px 1px", textAlign: "left" }}>Öğretmen</th>
+                                <th style={{ width: "10%", fontSize: "8px", padding: "1.5px 1px" }}>HDS</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -3000,18 +3045,18 @@ export default function App() {
                                 const teacherNames = assignedTeachers.map(t => t ? t.name : "").join(", ");
                                 return (
                                   <tr key={a.id}>
-                                    <td style={{ fontSize: "8px", padding: "2px" }}>{index + 1}</td>
-                                    <td style={{ fontSize: "8px", padding: "2px" }} className="font-extrabold">{course?.code || "-"}</td>
-                                    <td style={{ fontSize: "8px", padding: "2px", textAlign: "left" }}>{course?.name || "-"}</td>
-                                    <td style={{ fontSize: "8px", padding: "2px", textAlign: "left" }}>{teacherNames || "Atanmamış"}</td>
-                                    <td style={{ fontSize: "8px", padding: "2px" }} className="font-bold">{a.weeklyHours}</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }}>{index + 1}</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }} className="font-extrabold">{course?.code || "-"}</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1px 1.5px", textAlign: "left" }}>{course?.name || "-"}</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1px 1.5px", textAlign: "left" }}>{teacherNames || "Atanmamış"}</td>
+                                    <td style={{ fontSize: "7.5px", padding: "1px 1.5px" }} className="font-bold">{a.weeklyHours}</td>
                                   </tr>
                                 );
                               })}
                               {/* Total HDS row */}
                               <tr className="font-extrabold bg-slate-50">
-                                <td colSpan={4} style={{ textAlign: "right", fontSize: "8px", padding: "2px" }} className="pr-4 font-black">TOPLAM HAFTALIK DERS SAATİ:</td>
-                                <td style={{ fontSize: "8px", padding: "2px" }} className="font-black">
+                                <td colSpan={4} style={{ textAlign: "right", fontSize: "7.5px", padding: "1.5px" }} className="pr-4 font-black">TOPLAM HAFTALIK DERS SAATİ:</td>
+                                <td style={{ fontSize: "7.5px", padding: "1.5px" }} className="font-black">
                                   {classAssignments.reduce((acc, a) => acc + a.weeklyHours, 0)}
                                 </td>
                               </tr>
@@ -3021,9 +3066,11 @@ export default function App() {
                       </div>
 
                       {/* Signature block */}
-                      <div className="official-signature flex flex-col items-center">
-                        <div className="text-sm font-semibold">{state.settings.principalName || "Okul Müdürü"}</div>
-                        <div className="text-xs text-slate-500 mt-1">Okul Müdürü</div>
+                      <div className="official-signature flex flex-col items-center mt-2.5 pt-1.5 border-t border-slate-300 w-full">
+                        <div className="text-[9px] font-extrabold text-slate-800 tracking-wider">TEBLİĞ EDEN</div>
+                        <div className="text-[9px] font-bold text-slate-700 mt-1">{state.settings.principalName || "Okul Müdürü"}</div>
+                        <div className="text-[8.5px] text-slate-500 font-semibold">Okul Müdürü</div>
+                        <div className="text-[7.5px] font-mono text-slate-400 mt-2 border-b border-dashed border-slate-300 w-28 pb-0.5">İmza</div>
                       </div>
                     </div>
                   );
@@ -3040,17 +3087,19 @@ export default function App() {
                   const grid = getClassroomWeeklySchedule(crId);
 
                   return (
-                    <div key={crId} className="print-page flex flex-col justify-between" style={{ minHeight: "240mm" }}>
+                    <div key={crId} className="print-page flex flex-col justify-between">
                       <div>
                         {/* Official header */}
-                        <div className="official-header uppercase">
-                          <div>T.C.</div>
-                          <div className="mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                          <div className="text-xs font-semibold mt-2 tracking-wide text-slate-600">ATÖLYE HAFTALIK KULLANIM VE DERS PROGRAMI</div>
+                        <div className="official-header uppercase text-center mb-4">
+                          <div className="text-xs font-bold">T.C.</div>
+                          <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                          <div className="text-xs font-bold mt-1 tracking-wide">
+                            {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                          </div>
                         </div>
 
                         {/* Official Meta Info */}
-                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-4 font-mono text-xs">
+                        <div className="official-meta flex justify-between border-b border-slate-300 pb-2 mb-2 font-mono text-xs">
                           <div>
                             <div><strong>Atölye/Salon:</strong> {classroom.name} ({classroom.shortName || "Atölye"})</div>
                           </div>
@@ -3074,54 +3123,66 @@ export default function App() {
                               const periodTime = state.settings.periodTimes?.[pIdx];
                               const timeStr = periodTime ? `${periodTime.start} - ${periodTime.end}` : "";
                               return (
-                                <tr key={pIdx}>
-                                  <td className="font-bold">
-                                    <div className="font-black">{pIdx + 1}. Ders</div>
-                                    <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
-                                  </td>
-                                  {state.settings.days.map((_, dIdx) => {
-                                    const slots = grid[dIdx][pIdx]; // Array of { slot, classId }
-                                    const isLocked = classroom.unavailability?.[dIdx]?.[pIdx];
-                                    const closureName = classroom.closureNames?.[dIdx]?.[pIdx] || "";
-                                    const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                <React.Fragment key={pIdx}>
+                                  <tr>
+                                    <td className="font-bold">
+                                      <div className="font-black">{pIdx + 1}. Ders</div>
+                                      <div className="text-[8px] font-medium text-slate-500">{timeStr}</div>
+                                    </td>
+                                    {state.settings.days.map((_, dIdx) => {
+                                      const slots = grid[dIdx][pIdx]; // Array of { slot, classId }
+                                      const isLocked = classroom.unavailability?.[dIdx]?.[pIdx];
+                                      const closureName = classroom.closureNames?.[dIdx]?.[pIdx] || "";
+                                      const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
 
-                                    if (isLocked) {
-                                      if (isSpecialClosure) {
+                                      if (isLocked) {
+                                        if (isSpecialClosure) {
+                                          return (
+                                            <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
+                                              {closureName}
+                                            </td>
+                                          );
+                                        }
                                         return (
-                                          <td key={dIdx} className="bg-amber-50/60 p-1 text-center font-extrabold text-[8.5px] text-amber-800 uppercase border border-slate-300">
-                                            {closureName}
-                                          </td>
+                                          <td key={dIdx}></td>
                                         );
                                       }
+
+                                      if (!slots || slots.length === 0) {
+                                        return <td key={dIdx}>-</td>;
+                                      }
+
                                       return (
-                                        <td key={dIdx}></td>
-                                      );
-                                    }
-
-                                    if (!slots || slots.length === 0) {
-                                      return <td key={dIdx}>-</td>;
-                                    }
-
-                                    return (
-                                      <td key={dIdx} className="p-1">
-                                        {slots.map((sObj, sIdx) => {
-                                          const course = coursesMap.get(sObj.slot.courseId);
-                                          const classObj = classesMap.get(sObj.classId);
-                                          const assignedTeachers = sObj.slot.teacherId ? sObj.slot.teacherId.split(",").map(id => teachersMap.get(id)).filter(Boolean) : [];
-                                          return (
-                                            <div key={sIdx} className="leading-tight py-0.5">
-                                              <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight">{classObj?.name || "Sınıf"}</div>
-                                              <div className="font-bold text-blue-700 text-[8px] leading-tight mt-0.5">{course?.code || course?.name || "Ders"}</div>
-                                              <div className="text-[7.5px] text-slate-600 mt-0.5 leading-tight">
-                                                {assignedTeachers.map(t => getAbbreviatedTeacherName(t?.name || "")).join(", ")}
+                                        <td key={dIdx} className="p-1">
+                                          {slots.map((sObj, sIdx) => {
+                                            const course = coursesMap.get(sObj.slot.courseId);
+                                            const classObj = classesMap.get(sObj.classId);
+                                            const assignedTeachers = sObj.slot.teacherId ? sObj.slot.teacherId.split(",").map(id => teachersMap.get(id)).filter(Boolean) : [];
+                                            return (
+                                              <div key={sIdx} className="leading-tight py-0.5">
+                                                <div className="font-extrabold text-slate-900 text-[9px] uppercase leading-tight">{classObj?.name || "Sınıf"}</div>
+                                                <div className="font-bold text-blue-700 text-[8px] leading-tight mt-0.5 truncate" title={course?.name || course?.code || "Ders"}>{course?.code || course?.name || "Ders"}</div>
+                                                <div className="text-[7.5px] text-slate-600 mt-0.5 leading-tight">
+                                                  {assignedTeachers.map(t => getAbbreviatedTeacherName(t?.name || "")).join(", ")}
+                                                </div>
                                               </div>
-                                            </div>
-                                          );
-                                        })}
+                                            );
+                                          })}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                  {state.settings.lunchBreakAfter && state.settings.lunchBreakAfter > 0 && state.settings.lunchBreakAfter === pIdx + 1 && (
+                                    <tr key={`lunch-${pIdx}`} style={{ height: "14px", backgroundColor: "#f8fafc" }}>
+                                      <td style={{ padding: "2px", fontSize: "7px", fontWeight: "bold", backgroundColor: "#cbd5e1" }}>
+                                        Öğle Arası
                                       </td>
-                                    );
-                                  })}
-                                </tr>
+                                      <td colSpan={numDays} style={{ padding: "2px", fontSize: "7.5px", fontWeight: "extrabold", backgroundColor: "#f8fafc", color: "#475569" }}>
+                                        ÖĞLE ARASI
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>
@@ -3129,9 +3190,11 @@ export default function App() {
                       </div>
 
                       {/* Signature block */}
-                      <div className="official-signature flex flex-col items-center">
-                        <div className="text-sm font-semibold">{state.settings.principalName || "Okul Müdürü"}</div>
-                        <div className="text-xs text-slate-500 mt-1">Okul Müdürü</div>
+                      <div className="official-signature flex flex-col items-center mt-2.5 pt-1.5 border-t border-slate-300 w-full">
+                        <div className="text-[9px] font-extrabold text-slate-800 tracking-wider">TEBLİĞ EDEN</div>
+                        <div className="text-[9px] font-bold text-slate-700 mt-1">{state.settings.principalName || "Okul Müdürü"}</div>
+                        <div className="text-[8.5px] text-slate-500 font-semibold">Okul Müdürü</div>
+                        <div className="text-[7.5px] font-mono text-slate-400 mt-2 border-b border-dashed border-slate-300 w-28 pb-0.5">İmza</div>
                       </div>
                     </div>
                   );
@@ -3143,9 +3206,11 @@ export default function App() {
                 return (
                   <div className="print-carsaf-page w-full">
                     <div className="official-header uppercase text-center mb-4">
-                      <div className="text-base font-black">T.C.</div>
-                      <div className="text-base font-black mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                      <div className="text-xs font-bold mt-1">ÖĞRETMENLER HAFTALIK DERS DAĞITIM PLANI ÇARŞAF LİSTESİ</div>
+                      <div className="text-xs font-bold">T.C.</div>
+                      <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                      <div className="text-xs font-bold mt-1 tracking-wide">
+                        {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                      </div>
                     </div>
                     <div className="text-right text-[9px] font-mono mb-2">
                       <strong>Tarih:</strong> {state.settings.effectiveDate ? new Date(state.settings.effectiveDate).toLocaleDateString('tr-TR') : getFormattedDate()}
@@ -3153,25 +3218,26 @@ export default function App() {
                     <table className="print-carsaf-table">
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{ width: "12%" }}>Öğretmen / Branş</th>
+                          <th rowSpan={2} className="border-thick-right" style={{ width: "12%" }}>Öğretmen / Branş</th>
                           {state.settings.days.map((day, dIdx) => (
-                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black">{day}</th>
+                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black border-thick-right">{day}</th>
                           ))}
                         </tr>
                         <tr>
                           {state.settings.days.map(() => 
                             Array.from({ length: numPeriods }).map((_, pIdx) => (
-                              <th key={pIdx} className="font-extrabold text-[8px] bg-slate-50 border border-black">{pIdx + 1}</th>
+                              <th key={pIdx} className={`font-extrabold text-[8px] bg-slate-50 border border-black ${pIdx === numPeriods - 1 ? "border-thick-right" : ""}`}>{pIdx + 1}</th>
                             ))
                           )}
                         </tr>
                       </thead>
                       <tbody>
-                        {state.teachers.map((teacher) => {
+                        {state.teachers.map((teacher, tIdx) => {
                           const grid = getTeacherWeeklySchedule(teacher.id);
+                          const rowBgColor = zebraColors[tIdx % zebraColors.length];
                           return (
                             <tr key={teacher.id}>
-                              <td className="font-extrabold text-left px-1.5 text-[9px] border border-black">
+                              <td className="font-extrabold text-left px-1.5 text-[9px] border border-black border-thick-right carsaf-row-header" style={{ backgroundColor: rowBgColor }}>
                                 <div className="font-black text-slate-900 leading-tight uppercase">{teacher.name}</div>
                                 <div className="text-[7.5px] font-medium text-slate-500 mt-0.5">{teacher.branch || "-"}</div>
                               </td>
@@ -3180,27 +3246,29 @@ export default function App() {
                                   const slots = grid[dIdx][pIdx];
                                   const isLocked = teacher.unavailability?.[dIdx]?.[pIdx];
                                   const closureName = teacher.closureNames?.[dIdx]?.[pIdx] || "";
-                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
+
+                                  const isThick = pIdx === numPeriods - 1;
 
                                   if (isLocked) {
                                     if (isSpecialClosure) {
                                       return (
-                                        <td key={pIdx} className="border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase">
+                                        <td key={pIdx} className={`border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase ${isThick ? "border-thick-right" : ""}`}>
                                           {closureName}
                                         </td>
                                       );
                                     }
                                     return (
-                                      <td key={pIdx} className="border border-black text-center"></td>
+                                      <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: "#e2e8f0" }}></td>
                                     );
                                   }
 
                                   if (!slots || slots.length === 0) {
-                                    return <td key={pIdx} className="border border-black text-center">-</td>;
+                                    return <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>-</td>;
                                   }
 
                                   return (
-                                    <td key={pIdx} className="border border-black text-center leading-tight px-0.5">
+                                    <td key={pIdx} className={`border border-black text-center leading-tight px-0.5 ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>
                                       {slots.map((ts, index) => {
                                         const classObj = classesMap.get(ts.classId);
                                         const course = coursesMap.get(ts.slot.courseId);
@@ -3229,9 +3297,11 @@ export default function App() {
                 return (
                   <div className="print-carsaf-page w-full">
                     <div className="official-header uppercase text-center mb-4">
-                      <div className="text-base font-black">T.C.</div>
-                      <div className="text-base font-black mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                      <div className="text-xs font-bold mt-1">SINIFLAR HAFTALIK DERS DAĞITIM PLANI ÇARŞAF LİSTESİ</div>
+                      <div className="text-xs font-bold">T.C.</div>
+                      <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                      <div className="text-xs font-bold mt-1 tracking-wide">
+                        {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                      </div>
                     </div>
                     <div className="text-right text-[9px] font-mono mb-2">
                       <strong>Tarih:</strong> {state.settings.effectiveDate ? new Date(state.settings.effectiveDate).toLocaleDateString('tr-TR') : getFormattedDate()}
@@ -3239,25 +3309,26 @@ export default function App() {
                     <table className="print-carsaf-table">
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{ width: "10%" }}>Sınıf</th>
+                          <th rowSpan={2} className="border-thick-right" style={{ width: "10%" }}>Sınıf</th>
                           {state.settings.days.map((day, dIdx) => (
-                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black">{day}</th>
+                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black border-thick-right" style={{ borderRight: "3px solid #000" }}>{day}</th>
                           ))}
                         </tr>
                         <tr>
                           {state.settings.days.map(() => 
                             Array.from({ length: numPeriods }).map((_, pIdx) => (
-                              <th key={pIdx} className="font-extrabold text-[8px] bg-slate-50 border border-black">{pIdx + 1}</th>
+                              <th key={pIdx} className={`font-extrabold text-[8px] bg-slate-50 border border-black ${pIdx === numPeriods - 1 ? "border-thick-right" : ""}`}>{pIdx + 1}</th>
                             ))
                           )}
                         </tr>
                       </thead>
                       <tbody>
-                        {state.classes.map((classObj) => {
+                        {state.classes.map((classObj, cIdx) => {
                           const grid = getClassWeeklySchedule(classObj.id);
+                          const rowBgColor = zebraColors[cIdx % zebraColors.length];
                           return (
                             <tr key={classObj.id}>
-                              <td className="font-black px-1.5 text-[9.5px] border border-black text-center text-slate-900 bg-slate-50 uppercase">
+                              <td className="font-black px-1.5 text-[9.5px] border border-black text-center text-slate-900 uppercase border-thick-right carsaf-row-header" style={{ backgroundColor: rowBgColor }}>
                                 {classObj.name}
                               </td>
                               {state.settings.days.map((_, dIdx) => 
@@ -3265,23 +3336,25 @@ export default function App() {
                                   const slot = grid[dIdx][pIdx];
                                   const isLocked = classObj.unavailability?.[dIdx]?.[pIdx];
                                   const closureName = classObj.closureNames?.[dIdx]?.[pIdx] || "";
-                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
+
+                                  const isThick = pIdx === numPeriods - 1;
 
                                   if (isLocked) {
                                     if (isSpecialClosure) {
                                       return (
-                                        <td key={pIdx} className="border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase">
+                                        <td key={pIdx} className={`border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase ${isThick ? "border-thick-right" : ""}`}>
                                           {closureName}
                                         </td>
                                       );
                                     }
                                     return (
-                                      <td key={pIdx} className="border border-black text-center"></td>
+                                      <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: "#e2e8f0" }}></td>
                                     );
                                   }
 
                                   if (!slot) {
-                                    return <td key={pIdx} className="border border-black text-center">-</td>;
+                                    return <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>-</td>;
                                   }
 
                                   const course = coursesMap.get(slot.courseId);
@@ -3289,7 +3362,7 @@ export default function App() {
                                   const teacherInitials = assignedTeachers.map(t => getAbbreviatedTeacherName(t?.name || "")).join(", ");
 
                                   return (
-                                    <td key={pIdx} className="border border-black text-center leading-tight px-0.5">
+                                    <td key={pIdx} className={`border border-black text-center leading-tight px-0.5 ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>
                                       <div className="font-black text-slate-900 text-[8px]">{course?.code || course?.name}</div>
                                       <div className="text-slate-500 text-[7px] truncate font-medium block">{teacherInitials || "Atanmamış"}</div>
                                     </td>
@@ -3310,9 +3383,11 @@ export default function App() {
                 return (
                   <div className="print-carsaf-page w-full">
                     <div className="official-header uppercase text-center mb-4">
-                      <div className="text-base font-black">T.C.</div>
-                      <div className="text-base font-black mt-1">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
-                      <div className="text-xs font-bold mt-1">ATÖLYE VE SALONLAR KULLANIM PLANI ÇARŞAF LİSTESİ</div>
+                      <div className="text-xs font-bold">T.C.</div>
+                      <div className="text-sm font-extrabold mt-0.5">{state.settings.schoolName || "OKUL ADI BELİRTİLMEDİ"}</div>
+                      <div className="text-xs font-bold mt-1 tracking-wide">
+                        {state.settings.academicYear ? `${state.settings.academicYear} EĞİTİM ÖĞRETİM YILI ` : ""}HAFTALIK DERS PROGRAMI
+                      </div>
                     </div>
                     <div className="text-right text-[9px] font-mono mb-2">
                       <strong>Tarih:</strong> {state.settings.effectiveDate ? new Date(state.settings.effectiveDate).toLocaleDateString('tr-TR') : getFormattedDate()}
@@ -3320,25 +3395,26 @@ export default function App() {
                     <table className="print-carsaf-table">
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{ width: "12%" }}>Atölye / Salon</th>
+                          <th rowSpan={2} className="border-thick-right" style={{ width: "12%" }}>Atölye / Salon</th>
                           {state.settings.days.map((day, dIdx) => (
-                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black">{day}</th>
+                            <th key={dIdx} colSpan={numPeriods} className="bg-slate-100 font-bold text-[9px] uppercase border border-black border-thick-right" style={{ borderRight: "3px solid #000" }}>{day}</th>
                           ))}
                         </tr>
                         <tr>
                           {state.settings.days.map(() => 
                             Array.from({ length: numPeriods }).map((_, pIdx) => (
-                              <th key={pIdx} className="font-extrabold text-[8px] bg-slate-50 border border-black">{pIdx + 1}</th>
+                              <th key={pIdx} className={`font-extrabold text-[8px] bg-slate-50 border border-black ${pIdx === numPeriods - 1 ? "border-thick-right" : ""}`}>{pIdx + 1}</th>
                             ))
                           )}
                         </tr>
                       </thead>
                       <tbody>
-                        {state.classrooms.map((classroom) => {
+                        {state.classrooms.map((classroom, crIdx) => {
                           const grid = getClassroomWeeklySchedule(classroom.id);
+                          const rowBgColor = zebraColors[crIdx % zebraColors.length];
                           return (
                             <tr key={classroom.id}>
-                              <td className="font-extrabold px-1.5 text-[9px] border border-black leading-tight uppercase text-slate-900 bg-slate-50">
+                              <td className="font-extrabold px-1.5 text-[9px] border border-black leading-tight uppercase text-slate-900 border-thick-right carsaf-row-header" style={{ backgroundColor: rowBgColor }}>
                                 <div>{classroom.name}</div>
                               </td>
                               {state.settings.days.map((_, dIdx) => 
@@ -3346,27 +3422,29 @@ export default function App() {
                                   const slots = grid[dIdx][pIdx];
                                   const isLocked = classroom.unavailability?.[dIdx]?.[pIdx];
                                   const closureName = classroom.closureNames?.[dIdx]?.[pIdx] || "";
-                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toUpperCase() !== "KAPALI");
+                                  const isSpecialClosure = !!(closureName && closureName.trim() !== "" && closureName.trim().toLocaleUpperCase("tr-TR") !== "KAPALI");
+
+                                  const isThick = pIdx === numPeriods - 1;
 
                                   if (isLocked) {
                                     if (isSpecialClosure) {
                                       return (
-                                        <td key={pIdx} className="border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase">
+                                        <td key={pIdx} className={`border border-black text-center font-extrabold text-[7.5px] bg-amber-50 text-amber-900 uppercase ${isThick ? "border-thick-right" : ""}`}>
                                           {closureName}
                                         </td>
                                       );
                                     }
                                     return (
-                                      <td key={pIdx} className="border border-black text-center"></td>
+                                      <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: "#e2e8f0" }}></td>
                                     );
                                   }
 
                                   if (!slots || slots.length === 0) {
-                                    return <td key={pIdx} className="border border-black text-center">-</td>;
+                                    return <td key={pIdx} className={`border border-black text-center ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>-</td>;
                                   }
 
                                   return (
-                                    <td key={pIdx} className="border border-black text-center leading-tight px-0.5">
+                                    <td key={pIdx} className={`border border-black text-center leading-tight px-0.5 ${isThick ? "border-thick-right" : ""}`} style={{ backgroundColor: rowBgColor }}>
                                       {slots.map((sObj, index) => {
                                         const classObj = classesMap.get(sObj.classId);
                                         const course = coursesMap.get(sObj.slot.courseId);
@@ -3412,7 +3490,7 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800">{confirmModal.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">{confirmModal.message}</p>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium whitespace-pre-line">{confirmModal.message}</p>
                 </div>
               </div>
               <div className="bg-slate-50 px-6 py-4 flex items-center justify-end space-x-3 border-t border-slate-100">

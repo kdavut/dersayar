@@ -12,7 +12,8 @@ import {
   Teacher,
   GradeClass,
   Classroom,
-  Course
+  Course,
+  UnavailabilityMap
 } from "../types";
 
 export interface ProgressUpdate {
@@ -311,15 +312,14 @@ export function isPlacementValidEx(
     : null;
   const classItem = state.classes.find(c => c.id === assignment.classId);
 
-  if (settings.groupLessonsMode === 'different_days_strict') {
-    const classDaySched = tempSchedule[assignment.classId]?.[dayIndex];
-    if (classDaySched) {
-      const hasOtherAssignmentOfSameCourse = classDaySched.some(
-        slot => slot !== null && slot.courseId === assignment.courseId && slot.assignmentId !== assignment.id
-      );
-      if (hasOtherAssignmentOfSameCourse) {
-        return false;
-      }
+  // Strict different days constraint check - different blocks of same course must go to different days
+  const classDaySched = tempSchedule[assignment.classId]?.[dayIndex];
+  if (classDaySched) {
+    const hasOtherAssignmentOfSameCourse = classDaySched.some(
+      slot => slot !== null && slot.courseId === assignment.courseId
+    );
+    if (hasOtherAssignmentOfSameCourse) {
+      return false;
     }
   }
 
@@ -392,6 +392,97 @@ export function isPlacementValidEx(
   }
 
   return true;
+}
+
+export interface FeasibilityIssue {
+  type: "error" | "warning";
+  entityType: "teacher" | "class" | "classroom";
+  entityName: string;
+  assignedHours: number;
+  availableHours: number;
+  message: string;
+}
+
+export function preSolveFeasibilityCheck(state: AppState): FeasibilityIssue[] {
+  const { settings, teachers, classes, classrooms, assignments } = state;
+  const numDays = settings.days.length;
+  const numPeriods = settings.periodsPerDay;
+  const totalSlotsPerEntity = numDays * numPeriods;
+  const issues: FeasibilityIssue[] = [];
+
+  // Helper to count available slots for an entity
+  const countAvailableSlots = (unavailability: UnavailabilityMap) => {
+    let unavail = 0;
+    for (let d = 0; d < numDays; d++) {
+      if (unavailability && unavailability[d]) {
+        for (let p = 0; p < numPeriods; p++) {
+          if (unavailability[d][p]) {
+            unavail++;
+          }
+        }
+      }
+    }
+    return totalSlotsPerEntity - unavail;
+  };
+
+  // 1. Teacher Check
+  teachers.forEach(t => {
+    const teacherAssignments = assignments.filter(a => {
+      if (!a.teacherId) return false;
+      return a.teacherId.split(",").includes(t.id);
+    });
+    const totalHours = teacherAssignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+    const available = countAvailableSlots(t.unavailability);
+
+    if (totalHours > available) {
+      issues.push({
+        type: "error",
+        entityType: "teacher",
+        entityName: t.name,
+        assignedHours: totalHours,
+        availableHours: available,
+        message: `${t.name} öğretmeninin haftalık ${totalHours} saat dersi var ama sadece ${available} saat müsaitliği var — bu haliyle tam çözüm imkânsız.`
+      });
+    }
+  });
+
+  // 2. Class Check
+  classes.forEach(c => {
+    const classAssignments = assignments.filter(a => a.classId === c.id);
+    const totalHours = classAssignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+    const available = countAvailableSlots(c.unavailability);
+
+    if (totalHours > available) {
+      issues.push({
+        type: "error",
+        entityType: "class",
+        entityName: c.name,
+        assignedHours: totalHours,
+        availableHours: available,
+        message: `${c.name} sınıfının haftalık ${totalHours} saat dersi var ama sadece ${available} saat müsaitliği var — bu haliyle tam çözüm imkânsız.`
+      });
+    }
+  });
+
+  // 3. Classroom Check
+  classrooms.forEach(cr => {
+    const classroomAssignments = assignments.filter(a => a.classroomId === cr.id);
+    const totalHours = classroomAssignments.reduce((sum, a) => sum + a.weeklyHours, 0);
+    const available = countAvailableSlots(cr.unavailability);
+
+    if (totalHours > available) {
+      issues.push({
+        type: "error",
+        entityType: "classroom",
+        entityName: cr.name,
+        assignedHours: totalHours,
+        availableHours: available,
+        message: `${cr.name} atölyesinin/dersliğinin haftalık ${totalHours} saatlik talebi var ama sadece ${available} saat müsaitliği var — bu haliyle tam çözüm imkânsız.`
+      });
+    }
+  });
+
+  return issues;
 }
 
 export interface ScheduleScoreBreakdown {
@@ -547,15 +638,24 @@ export function calculateScheduleScore(
         }
       });
 
-      const mode = settings.groupLessonsMode || "different_days_flexible";
-      if (mode === "same_day") {
-        if (daysWithCourse > 1 && totalLessons > 1) {
-          distributionPenalty += (daysWithCourse - 1) * 30;
+      // Find assignment to calculate ideal number of days/blocks
+      let idealDays = 1;
+      const assign = state.assignments.find(a => a.classId === classId && a.courseId === courseId);
+      if (assign) {
+        if (assign.customPlacementMode) {
+          const parts = assign.customPlacementMode.split("+").map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p > 0);
+          idealDays = parts.length;
+        } else {
+          const prefBlock = assign.preferredBlockSize || 2;
+          idealDays = Math.ceil(assign.weeklyHours / prefBlock);
         }
       } else {
-        if (daysWithCourse === 1 && totalLessons >= 3) {
-          distributionPenalty += 40;
-        }
+        idealDays = Math.ceil(totalLessons / 2);
+      }
+
+      if (daysWithCourse < idealDays) {
+        const missingDays = idealDays - daysWithCourse;
+        distributionPenalty += missingDays * 250;
       }
     });
   });
@@ -753,11 +853,207 @@ export function diagnoseUnplacedAssignment(
 }
 
 let activeWorker: Worker | null = null;
+let activeResolve: ((value: any) => void) | null = null;
+let lastProgressProgress: any = null;
+let initialSchedule: ClassScheduleMap | null = null;
+let initialAppState: AppState | null = null;
+
+export function restoreMissingTeacherHours(
+  initialSched: ClassScheduleMap,
+  newSched: ClassScheduleMap,
+  state: AppState
+): ClassScheduleMap {
+  let finalSchedule = JSON.parse(JSON.stringify(newSched));
+  const { teachers, assignments, settings } = state;
+  const numDays = settings.days.length;
+  const numPeriods = settings.periodsPerDay;
+
+  const assignmentsMap = new Map<string, any>();
+  for (const a of assignments) {
+    assignmentsMap.set(a.id, a);
+  }
+
+  // Calculate initial teacher hours
+  const initialTeacherHours: Record<string, number> = {};
+  for (const t of teachers) {
+    initialTeacherHours[t.id] = 0;
+  }
+  for (const cId of Object.keys(initialSched)) {
+    for (let d = 0; d < numDays; d++) {
+      const slots = initialSched[cId]?.[d];
+      if (slots) {
+        for (let p = 0; p < numPeriods; p++) {
+          const slot = slots[p];
+          if (slot) {
+            const assign = assignmentsMap.get(slot.assignmentId);
+            if (assign?.teacherId) {
+              const tIds = assign.teacherId.split(",").map((id: string) => id.trim()).filter(Boolean);
+              for (const tId of tIds) {
+                initialTeacherHours[tId] = (initialTeacherHours[tId] || 0) + 1;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Iterative restoration loop (max 5 passes)
+  for (let pass = 0; pass < 5; pass++) {
+    // 1. Calculate current teacher hours in finalSchedule
+    const currentTeacherHours: Record<string, number> = {};
+    for (const t of teachers) {
+      currentTeacherHours[t.id] = 0;
+    }
+    for (const cId of Object.keys(finalSchedule)) {
+      for (let d = 0; d < numDays; d++) {
+        const slots = finalSchedule[cId]?.[d];
+        if (slots) {
+          for (let p = 0; p < numPeriods; p++) {
+            const slot = slots[p];
+            if (slot) {
+              const assign = assignmentsMap.get(slot.assignmentId);
+              if (assign?.teacherId) {
+                const tIds = assign.teacherId.split(",").map((id: string) => id.trim()).filter(Boolean);
+                for (const tId of tIds) {
+                  currentTeacherHours[tId] = (currentTeacherHours[tId] || 0) + 1;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Find any teachers whose current hours are less than initial hours
+    const decreasedTeachers = new Set<string>();
+    for (const t of teachers) {
+      if (currentTeacherHours[t.id] < initialTeacherHours[t.id]) {
+        decreasedTeachers.add(t.id);
+      }
+    }
+
+    if (decreasedTeachers.size === 0) {
+      break; // Safe! No teacher has fewer hours than they started with.
+    }
+
+    // 3. Restore initial slots for the decreased teachers
+    let restoredAny = false;
+    for (const cId of Object.keys(initialSched)) {
+      if (!finalSchedule[cId]) {
+        finalSchedule[cId] = {};
+      }
+      for (let d = 0; d < numDays; d++) {
+        if (!finalSchedule[cId][d]) {
+          finalSchedule[cId][d] = Array(numPeriods).fill(null);
+        }
+      }
+
+      for (let d = 0; d < numDays; d++) {
+        const slots = initialSched[cId]?.[d];
+        if (slots) {
+          for (let p = 0; p < numPeriods; p++) {
+            const slot = slots[p];
+            if (slot) {
+              const assign = assignmentsMap.get(slot.assignmentId);
+              if (assign?.teacherId) {
+                const tIds = assign.teacherId.split(",").map((id: string) => id.trim()).filter(Boolean);
+                const hasDecreasedTeacher = tIds.some(tId => decreasedTeachers.has(tId));
+                
+                const currentSlot = finalSchedule[cId][d][p];
+                const isAlreadyRestored = currentSlot && currentSlot.assignmentId === slot.assignmentId;
+                
+                if (hasDecreasedTeacher && !isAlreadyRestored) {
+                  restoredAny = true;
+                  
+                  // Clear the position first
+                  finalSchedule[cId][d][p] = null;
+
+                  // Clear other class slots that have teacher or classroom conflict with this restored slot
+                  for (const otherCId of Object.keys(finalSchedule)) {
+                    const otherSlot = finalSchedule[otherCId]?.[d]?.[p];
+                    if (otherSlot) {
+                      const otherAssign = assignmentsMap.get(otherSlot.assignmentId);
+                      if (otherAssign) {
+                        let hasTeacherConflict = false;
+                        if (otherAssign.teacherId) {
+                          const otherTIds = otherAssign.teacherId.split(",").map((id: string) => id.trim()).filter(Boolean);
+                          hasTeacherConflict = otherTIds.some(tId => tIds.includes(tId));
+                        }
+                        const hasClassroomConflict = assign.classroomId && otherAssign.classroomId && assign.classroomId === otherAssign.classroomId;
+
+                        if (hasTeacherConflict || hasClassroomConflict) {
+                          finalSchedule[otherCId][d][p] = null;
+                        }
+                      }
+                    }
+                  }
+
+                  // Restore slot
+                  finalSchedule[cId][d][p] = slot;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!restoredAny) {
+      break; // Prevent infinite loop if no changes are made
+    }
+  }
+
+  return finalSchedule;
+}
 
 export function stopActiveScheduler() {
   if (activeWorker) {
-    activeWorker.terminate();
+    try {
+      activeWorker.postMessage({ type: "stop" });
+    } catch (e) {
+      console.error("Error posting stop message to worker:", e);
+    }
+    const w = activeWorker;
     activeWorker = null;
+    
+    // Safety fallback: hard-terminate the worker after 1200ms if it fails to stop cleanly
+    setTimeout(() => {
+      try {
+        w.terminate();
+      } catch (e) {}
+
+      // If the promise is still pending, resolve it now with the last known best schedule
+      if (activeResolve) {
+        let lastSchedule = lastProgressProgress?.bestSchedule || initialSchedule || {};
+        if (initialSchedule && initialAppState) {
+          lastSchedule = restoreMissingTeacherHours(initialSchedule, lastSchedule, initialAppState);
+        }
+        const unplacedCount = lastProgressProgress?.unplacedHours ?? 0;
+        activeResolve({
+          success: false,
+          schedule: lastSchedule,
+          message: "Planlama kullanıcı tarafından durduruldu. Mevcut en iyi program yüklendi.",
+          unplacedCount: unplacedCount,
+          unplacedDetails: lastProgressProgress?.unplacedDetails || []
+        });
+        activeResolve = null;
+        lastProgressProgress = null;
+      }
+    }, 1200);
+  } else {
+    // If no active worker but activeResolve is still set, clean it up
+    if (activeResolve) {
+      activeResolve({
+        success: false,
+        schedule: initialSchedule || {},
+        message: "Planlama durduruldu.",
+        unplacedCount: 0,
+        unplacedDetails: []
+      });
+      activeResolve = null;
+      lastProgressProgress = null;
+    }
   }
 }
 
@@ -777,6 +1073,7 @@ export async function generateStepByStepScheduleAsync(
     deepSearch?: boolean;
     maxDepth?: number;
     stepByStep?: boolean;
+    randomSeed?: number;
   }
 ): Promise<{
   success: boolean;
@@ -784,20 +1081,29 @@ export async function generateStepByStepScheduleAsync(
   message: string;
   unplacedDetails?: string[];
   unplacedReports?: UnplacedReportItem[];
+  usedSeed?: number;
 }> {
   return new Promise((resolve, reject) => {
     try {
       stopActiveScheduler();
+
+      initialSchedule = state.schedule || {};
+      initialAppState = state;
 
       const worker = new Worker(
         new URL("./scheduler.worker.ts", import.meta.url),
         { type: "module" }
       );
       activeWorker = worker;
+      activeResolve = resolve;
+      lastProgressProgress = null;
 
       worker.onmessage = (event) => {
         const { type, progress, result } = event.data;
         if (type === "progress") {
+          if (progress) {
+            lastProgressProgress = progress;
+          }
           if (onProgress && progress) {
             onProgress(progress);
           }
@@ -805,9 +1111,15 @@ export async function generateStepByStepScheduleAsync(
           if (activeWorker === worker) {
             activeWorker = null;
           }
+          activeResolve = null; // Clear so safety timeout won't double-resolve
           worker.terminate();
 
           if (result && result.schedule) {
+            // Apply restoration to ensure no teacher's placed hours are decreased compared to before starting
+            if (initialSchedule && initialAppState) {
+              result.schedule = restoreMissingTeacherHours(initialSchedule, result.schedule, initialAppState);
+            }
+
             // Compute diagnostics and reports on the main thread for the unplaced items
             const { settings, teachers, classes, assignments } = state;
             const numDays = settings.days.length;

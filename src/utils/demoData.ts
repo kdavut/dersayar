@@ -151,9 +151,7 @@ export function generateDemoState(): AppState {
       periodsPerDay: periods,
       periodTimes: [...DEFAULT_TIMES],
       lunchBreakAfter: 4,
-      lunchBreakDuration: 45,
-      groupLessonsMode: "different_days_flexible",
-      maxTeacherDailyGaps: 1
+      lunchBreakDuration: 45
     },
     teachers,
     classes,

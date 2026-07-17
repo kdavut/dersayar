@@ -11,6 +11,7 @@ export interface PeriodTime {
 export interface SchoolSettings {
   schoolName: string;
   principalName: string; // Müdür Adı
+  academicYear?: string; // Eğitim Öğretim Yılı
   effectiveDate: string; // Ders programı uygulanma tarihi
   officialDocumentNo: string; // Resmi tebliğ yazısı evrak sayısı
   days: string[]; // e.g. ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
@@ -18,9 +19,6 @@ export interface SchoolSettings {
   periodTimes: PeriodTime[];
   lunchBreakAfter?: number; // Öğle arası hangi dersten sonra (0: yok)
   lunchBreakDuration?: number; // Öğle arası süresi (dakika)
-  groupLessonsMode?: 'same_day' | 'different_days_strict' | 'different_days_flexible'; // Ders gruplarının yerleşme biçimi
-  maxTeacherDailyGaps?: number; // Bir öğretmenin ders programında otomatik atandığında günlük en fazla kaç ders boşluk verelim [sayı]
-  maxDepth?: number; // Çözüm Derinliği (5-30)
 }
 
 export interface UnavailabilityMap {

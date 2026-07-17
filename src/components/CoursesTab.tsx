@@ -45,7 +45,7 @@ export default function CoursesTab() {
         const item = draft.courses.find((c) => c.id === editingCourseId);
         if (item) {
           item.name = newCourse.name;
-          item.code = newCourse.code.toUpperCase();
+          item.code = newCourse.code.toLocaleUpperCase("tr-TR");
           item.weeklyHours = weeklyHoursNum;
           item.placementMode = cleanPlacement;
         }
@@ -56,7 +56,7 @@ export default function CoursesTab() {
         const item: Course = {
           id,
           name: newCourse.name,
-          code: newCourse.code.toUpperCase(),
+          code: newCourse.code.toLocaleUpperCase("tr-TR"),
           weeklyHours: weeklyHoursNum,
           placementMode: cleanPlacement
         };

@@ -372,7 +372,7 @@ export function optimizeGapsForTeacher(
   let improved = false;
   let iterations = 0;
   // maxDepth is integrated to scale gap optimization attempts/iterations
-  const maxDepth = state.settings.maxDepth ?? 15;
+  const maxDepth = 25;
   const maxIterations = maxDepth * 15;
   let currentGaps = initialGaps;
 
@@ -471,7 +471,7 @@ export function optimizeGapsForAllTeachers(
   let improved = false;
   let iterations = 0;
   // maxDepth is integrated to scale gap optimization attempts/iterations
-  const maxDepth = state.settings.maxDepth ?? 15;
+  const maxDepth = 25;
   const maxIterations = maxDepth * 30;
   let currentGaps = initialGaps;
 

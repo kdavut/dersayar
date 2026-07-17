@@ -220,14 +220,34 @@ export default function TeacherAssignmentsTab() {
       
       {/* LEFT COLUMN: ÖĞRETMENLER (Width: 4/12) */}
       <div className="xl:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
-          <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-400" />
-            <span>1. Öğretmen Listesi</span>
-          </h3>
-          <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
-            {state.teachers.length} Kayıt
-          </span>
+        {(() => {
+          const filteredTeachersCount = state.teachers.filter(t => 
+            t.name.toLowerCase().includes(teacherAssignTabSearch.toLowerCase()) ||
+            t.branch.toLowerCase().includes(teacherAssignTabSearch.toLowerCase())
+          ).length;
+
+          return (
+            <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
+              <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-400" />
+                <span>1. Öğretmen Listesi {teacherAssignTabSearch.trim() ? `(${filteredTeachersCount} bulundu)` : ""}</span>
+              </h3>
+              <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
+                {state.teachers.length} Kayıt
+              </span>
+            </div>
+          );
+        })()}
+
+        {/* Search Input for Teachers */}
+        <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+          <input
+            type="text"
+            value={teacherAssignTabSearch}
+            onChange={(e) => setTeacherAssignTabSearch(e.target.value)}
+            placeholder="Öğretmen veya branş ara..."
+            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+          />
         </div>
 
         {/* Teacher Table Container with Scroll */}
@@ -376,14 +396,34 @@ export default function TeacherAssignmentsTab() {
 
         {/* MIDDLE COLUMN: DERSLER (Width: 4/12) */}
         <div className="xl:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
-            <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-emerald-400" />
-              <span>2. Ders Listesi</span>
-            </h3>
-            <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
-              {state.courses.length} Ders
-            </span>
+          {(() => {
+            const filteredCoursesCount = state.courses.filter(c => 
+              c.name.toLowerCase().includes(courseAssignTabSearch.toLowerCase()) ||
+              c.code.toLowerCase().includes(courseAssignTabSearch.toLowerCase())
+            ).length;
+
+            return (
+              <div className="bg-slate-900 px-5 py-4 flex items-center justify-between">
+                <h3 className="text-xs font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-emerald-400" />
+                  <span>2. Ders Listesi {courseAssignTabSearch.trim() ? `(${filteredCoursesCount} bulundu)` : ""}</span>
+                </h3>
+                <span className="bg-slate-800 text-[10px] text-slate-300 font-bold px-2 py-0.5 rounded border border-slate-700">
+                  {state.courses.length} Ders
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* Search Input for Courses */}
+          <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+            <input
+              type="text"
+              value={courseAssignTabSearch}
+              onChange={(e) => setCourseAssignTabSearch(e.target.value)}
+              placeholder="Ders adı veya kod ara..."
+              className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+            />
           </div>
 
           {/* Course Table Container with Scroll */}
