@@ -2550,21 +2550,19 @@ const handleSetCustomDistribution = (assignmentId: string, distribution: string)
                         </button>
                       </div>
 
-                      {/* Sağ Kısım: Akıllı Otomasyon Doluluk İstatistiği */}
-                      <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs shrink-0 self-center">
+                      {/* Sağ Kısım: Akıllı Otomasyon İstatistiği */}
+                      <div className="flex items-center space-x-3 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-xs shrink-0 self-center">
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                          <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${totalAssignedHours === totalPlacedHours ? 'bg-emerald-400' : 'animate-ping bg-blue-400'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-2 w-2 ${totalAssignedHours === totalPlacedHours ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
                         </span>
-                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
-                          DOLULUK:
-                        </span>
-                        <span className="text-[10px] font-extrabold text-blue-600 font-mono">
-                          %{totalAssignedHours > 0 ? Math.round((totalPlacedHours / totalAssignedHours) * 100) : 0}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-bold">
-                          ({totalPlacedHours}/{totalAssignedHours} Saat)
-                        </span>
+                        <div className="flex space-x-2 text-[10.5px] font-medium font-mono text-slate-600">
+                          <span title="Toplam Ders Saati">T: <span className="font-bold text-slate-700">{totalAssignedHours}</span></span>
+                          <span className="text-slate-300">|</span>
+                          <span title="Yerleştirilen Ders Saati">Y: <span className="font-bold text-emerald-600">{totalPlacedHours}</span></span>
+                          <span className="text-slate-300">|</span>
+                          <span title="Kalan Ders Saati">K: <span className="font-bold text-rose-500">{totalAssignedHours - totalPlacedHours}</span></span>
+                        </div>
                       </div>
                     </div>
 
