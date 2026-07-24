@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Activity } from "lucide-react";
 import { useAppStore } from "../store/useAppStore";
-import { isChefOrCoordinatorCourse } from "../utils/scheduler";
 
 export default function RealtimeStatusTab() {
   const { historyState } = useAppStore();
@@ -11,7 +10,7 @@ export default function RealtimeStatusTab() {
 
   const state = historyState.current;
 
-  // Get current PC day and period
+  // Bilgisayarın yerel saati üzerinden gün ve ders saati değerlerini alırız.
   const turkishDays = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
   
   const getMinutes = (timeStr: string) => {
@@ -22,7 +21,7 @@ export default function RealtimeStatusTab() {
   const now = new Date();
   const systemDayName = turkishDays[now.getDay()];
   let systemDIdx = state.settings.days.indexOf(systemDayName);
-  if (systemDIdx === -1) systemDIdx = 0; // Default to first day if weekend
+  if (systemDIdx === -1) systemDIdx = 0; // Hafta sonu ise varsayılan olarak ilk günü seçeriz.
 
   const currentHours = String(now.getHours()).padStart(2, '0');
   const currentMinutes = String(now.getMinutes()).padStart(2, '0');
@@ -40,23 +39,22 @@ export default function RealtimeStatusTab() {
     }
   }
 
-  // Determine active day index and period index based on state
+  // Kullanıcının seçimine veya canlı zamana göre aktif gün ve ders indekslerini belirleriz.
   const activeDIdx = realtimeDaySel === "now" ? systemDIdx : realtimeDaySel;
   const activePIdx = (realtimeDaySel === "now" || realtimePeriodSel === "now") ? systemPIdx : (realtimePeriodSel as number);
 
   const activeDayName = state.settings.days[activeDIdx] || "Belirsiz";
   const activePeriodName = times[activePIdx] ? `${activePIdx + 1}. Ders (${times[activePIdx].start} - ${times[activePIdx].end})` : `${activePIdx + 1}. Ders`;
 
-  // Helper to check if slot is real lesson (excluding headship/coordination)
+  // Hücrede geçerli bir ders tanımlı olup olmadığını kontrol eden yardımcı fonksiyon.
   const isRealLessonSlot = (slot: any) => {
     if (!slot) return false;
     const course = state.courses.find(c => c.id === slot.courseId);
-    if (!course) return false;
-    return !isChefOrCoordinatorCourse(course.name, course.code);
+    return !!course;
   };
 
-  // Categorize teachers
-  // Let's first build teacher slot maps for the active day
+  // Öğretmenleri durumlarına göre kategorize etmek için hazırlık yaparız.
+  // Aktif gün için öğretmenlerin ders programı haritasını oluştururuz.
   const teacherSlotsMap = new Map<string, { periodIdx: number; slot: any; classId: string }[]>();
   state.teachers.forEach(t => teacherSlotsMap.set(t.id, []));
 
@@ -76,7 +74,7 @@ export default function RealtimeStatusTab() {
     }
   });
 
-  // Prepare categories
+  // Öğretmenlerin canlı durumlarını gruplandırmak için kategoriler oluşturuyoruz.
   const currentlyTeaching: { teacher: any; classNames: string; courseNames: string }[] = [];
   const breakTime: { teacher: any; completedCount: number; remainingCount: number }[] = [];
   const notStarted: { teacher: any; firstPeriod: number }[] = [];
@@ -141,7 +139,7 @@ export default function RealtimeStatusTab() {
       exit={{ opacity: 0, y: 10 }}
       className="flex-1 flex flex-col overflow-hidden p-1 space-y-1.5 text-slate-800"
     >
-      {/* Selector Header Bar */}
+      {/* Zaman ve Filtre Seçimlerinin Yapıldığı Başlık Alanı */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm shrink-0">
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5">
@@ -210,7 +208,7 @@ export default function RealtimeStatusTab() {
         </div>
       </div>
 
-      {/* Symmetrical 3x2 Grid */}
+      {/* Bilgi kartlarını ve analizleri hizalayan simetrik grid düzeni */}
       <div className="flex-1 overflow-y-auto pr-1">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 animate-fade-in pb-4">
           

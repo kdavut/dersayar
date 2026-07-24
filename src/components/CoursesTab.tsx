@@ -50,7 +50,7 @@ export default function CoursesTab() {
           item.placementMode = cleanPlacement;
         }
         setEditingCourseId(null);
-        showToast("Ders tanımı güncellendi.", "success");
+// removed toast
       } else {
         const id = "crs_" + Date.now();
         const item: Course = {
@@ -61,7 +61,7 @@ export default function CoursesTab() {
           placementMode: cleanPlacement
         };
         draft.courses.push(item);
-        showToast(`"${newCourse.name}" ders tanımı sisteme eklendi.`, "success");
+// removed toast
       }
     });
     setNewCourse({ name: "", code: "", weeklyHours: 2, placementMode: "2" });
@@ -104,7 +104,7 @@ export default function CoursesTab() {
             }
           });
         });
-        showToast("Ders tanımı ve ilgili yerleşimleri silindi.", "info");
+// removed toast
         setConfirmModal(null);
       }
     });

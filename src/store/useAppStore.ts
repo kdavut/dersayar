@@ -1,6 +1,6 @@
-import React from 'react';
+import { ChangeEvent } from 'react';
 import { create } from 'zustand';
-import { AppState, FullHistoryState } from '../types';
+import { AppState, FullHistoryState, ClassScheduleMap } from '../types';
 import { generateDemoState, createEmptyUnavailability } from '../utils/demoData';
 import { ProgressUpdate, generateAutomaticScheduleAsync, stopActiveScheduler, getDefaultMaxDepth, preSolveFeasibilityCheck } from '../utils/scheduler';
 import { loadScheduleFromCloud, saveScheduleToCloud } from '../firebase';
@@ -126,14 +126,14 @@ interface AppStoreActions {
   setUser: (user: any | null) => void;
   loadFromCloud: () => Promise<void>;
   setToast: (toast: { message: string; type: "success" | "error" | "info" } | null) => void;
-  showToast: (message: string, type: "success" | "error" | "info") => void;
+showToast: (message: string, type: "success" | "error" | "info") => void;
   setConfirmModal: (modal: UIState["confirmModal"]) => void;
   handleClearAllData: () => void;
   handleClearConstraints: () => void;
   handleClearManualLocks: () => void;
   handleClearAllTeachersSchedule: () => void;
   handleDownloadBackup: () => void;
-  handleImportBackup: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleImportBackup: (event: ChangeEvent<HTMLInputElement>) => void;
   
   // Setters for UI state
   setActiveTab: (tab: UIState["activeTab"]) => void;
@@ -543,7 +543,7 @@ export const useAppStore = create<AppStore>((set) => ({
           });
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ current: emptyState, isSynced: false }));
           setConfirmModal(null);
-          showToast("Tüm okul verileri tamamen silindi.", "success");
+// removed toast
         }
       }
     };
@@ -582,7 +582,7 @@ export const useAppStore = create<AppStore>((set) => ({
             });
           });
           setConfirmModal(null);
-          showToast("Tüm zaman ve engel kısıtları sıfırlandı.", "success");
+// removed toast
         }
       }
     };
@@ -624,7 +624,7 @@ export const useAppStore = create<AppStore>((set) => ({
             });
           });
           setConfirmModal(null);
-          showToast("Tüm elle sabitlenmiş ders kilitleri kaldırıldı.", "success");
+// removed toast
         }
       }
     };
@@ -657,7 +657,7 @@ export const useAppStore = create<AppStore>((set) => ({
             }
           });
           setConfirmModal(null);
-          showToast("Tüm öğretmenlerin programı tamamen silindi.", "success");
+// removed toast
         }
       }
     };
@@ -674,7 +674,7 @@ export const useAppStore = create<AppStore>((set) => ({
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      showToast("Tüm veriler başarıyla indirildi.", "success");
+      store.showToast("Yedek dosyası başarıyla indirildi.", "success");
     } catch (e) {
       showToast("Yedek dosyası oluşturulurken bir hata oluştu.", "error");
     }
@@ -702,9 +702,9 @@ export const useAppStore = create<AppStore>((set) => ({
           });
           if (hasUser) {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ current: json, isSynced: false }));
-            showToast("Yedek veriler başarıyla yüklendi ve geri alındı.", "success");
+            store.showToast("Değişiklikler geri yüklendi (çevrimdışı, buluta senkronizasyon bekleniyor).", "info");
           } else {
-            showToast("Yedek başarıyla yüklendi (Salt Okunur Mod). Düzenleme yapılamaz, sadece inceleyebilirsiniz.", "info");
+            store.showToast("Yedek başarıyla yüklendi.", "success");
           }
         } else {
           showToast("Geçersiz yedek dosyası formatı. Dosya geçerli bir yedek JSON olmalıdır.", "error");
@@ -837,7 +837,7 @@ export const useAppStore = create<AppStore>((set) => ({
       targetTeacherIds: targets?.teacherIds,
       deepSearch: extraOpts?.deepSearch !== undefined ? extraOpts.deepSearch : store.deepSearch,
       numTrials: extraOpts?.numTrials !== undefined ? extraOpts.numTrials : store.numTrials,
-      maxDurationMs: extraOpts?.maxDurationMs
+      maxDurationMs: extraOpts?.maxDurationMs || (keepExisting ? 120000 : undefined)
     });
     return result;
   },
@@ -852,7 +852,7 @@ export const useAppStore = create<AppStore>((set) => ({
     store.setIsScheduling(false);
     store.setSchedulingProgress(null);
     
-    store.showToast("Planlama durduruluyor... Mevcut en iyi program kaydediliyor.", "info");
+    store.showToast("Ders programı çözücü durduruldu.", "info");
   },
 
   runAutomaticScheduler: async (keepExisting, targets, bypassFeasibilityCheck) => {
@@ -979,9 +979,28 @@ export const useAppStore = create<AppStore>((set) => ({
       // 2. Run placement
       const result = await store.dersleri_yerleştir(preparedState, keepExisting, targets);
 
-      store.updateState((draft) => {
-        draft.schedule = result.schedule;
-      });
+      const countPlacedSlots = (sched: any) => {
+        let cnt = 0;
+        if (!sched) return 0;
+        for (const cId of Object.keys(sched)) {
+          const days = sched[cId];
+          if (days) {
+            for (const d of Object.keys(days)) {
+              days[parseInt(d)]?.forEach((slot: any) => { if (slot) cnt++; });
+            }
+          }
+        }
+        return cnt;
+      };
+
+      const prevPlaced = countPlacedSlots(preparedState.schedule);
+      const newPlaced = countPlacedSlots(result.schedule);
+
+      if (!keepExisting || newPlaced >= prevPlaced) {
+        store.updateState((draft) => {
+          draft.schedule = result.schedule;
+        });
+      }
 
       if (result.unplacedReports) {
         store.setUnplacedReports(result.unplacedReports);
@@ -990,7 +1009,7 @@ export const useAppStore = create<AppStore>((set) => ({
       const hasUnplaced = result.unplacedReports && result.unplacedReports.length > 0;
 
       if (result.success || !hasUnplaced) {
-        store.showToast(result.message || "Tüm dersler başarıyla yerleştirildi!", "success");
+        store.showToast("Tüm ders programı başarıyla yerleştirildi ve optimize edildi!", "success");
         store.setIsAnalysisOpen(false);
       } else {
         // Check if we were targeting a specific teacher (Öğretmen bazlı yerleştirme)
@@ -1025,17 +1044,17 @@ export const useAppStore = create<AppStore>((set) => ({
 
         if (targetedTeacherFullyPlaced) {
           const teacherName = preparedState.teachers.find(t => t.id === targetedTeacherIds[0])?.name || "Öğretmen";
-          store.showToast(`"${teacherName}" isimli öğretmenin tüm dersleri başarıyla yerleştirildi!`, "success");
+          store.showToast(`✅ ${teacherName} öğretmeninin tüm dersleri başarıyla programlandı!`, "success");
           store.setIsAnalysisOpen(false);
         } else if (targetedClassFullyPlaced) {
           const className = preparedState.classes.find(c => c.id === targetedClassIds[0])?.name || "Sınıf";
-          store.showToast(`"${className}" sınıfının tüm dersleri başarıyla yerleştirildi!`, "success");
+          store.showToast(`✅ ${className} sınıfının tüm dersleri başarıyla programlandı!`, "success");
           store.setIsAnalysisOpen(false);
         } else {
           if (result.unplacedDetails && result.unplacedDetails.length > 0) {
             store.setIsAnalysisOpen(true);
           }
-          store.showToast(result.message, "info");
+          store.showToast("Ders programı yerleştirildi ancak bazı dersler yerleştirilemedi. Lütfen kısıtları gevşetmeyi deneyin.", "warning");
         }
       }
     } catch (err) {
@@ -1137,69 +1156,74 @@ export const useAppStore = create<AppStore>((set) => ({
 
       // 4. Loop through teachers sequentially
       let totalUnplaced = [];
+      
+      // Kilitli olmayan tüm dersleri temizle (eğer sıfırdan oluşturuluyorsa)
       let currentState = preparedState;
-      let currentGlobalPlaced = initialGlobalPlacedSoFar;
-
-      for (let i = 0; i < sortedTeachers.length; i++) {
-        // Break early if cancelled
-        if (!useAppStore.getState().isScheduling) {
-           break;
-        }
-
-        const teacher = sortedTeachers[i];
-        const stats = teacherStats.get(teacher.id);
-        if (stats.totalHours === 0) continue; // Skip teachers with no assignments
-
-        // Only place this teacher's assignments
-        const result = await store.dersleri_yerleştir(
-          currentState, 
-          true, // keepExisting: true
-          { teacherIds: [teacher.id] }, 
-          { deepSearch: true, numTrials: 9999, maxDurationMs: 180000, 
-            extraProgressFields: {
-              targetTeacherName: `${teacher.name} (${i + 1} / ${sortedTeachers.length})`,
-              targetClassName: "",
-              globalTotalHours,
-              globalPlacedHours: currentGlobalPlaced
-            }
-          } // En derin çözüm, 3 dakika max
-        );
-
-        if (result.schedule) {
-          // Update the state for the next teacher
-          currentState = { ...currentState, schedule: result.schedule };
-          store.updateState((draft) => {
-            draft.schedule = result.schedule;
-          });
-
-          // Recalculate global placed
-          currentGlobalPlaced = 0;
-          for (const cId of Object.keys(result.schedule || {})) {
-            const classSched = result.schedule[cId];
-            if (classSched) {
-              for (const d of Object.keys(classSched)) {
-                classSched[parseInt(d)]?.forEach(slot => {
-                  if (slot !== null) currentGlobalPlaced++;
-                });
-              }
+      if (!store.schedulingKeepExisting && currentState.schedule) {
+        const newSchedule: ClassScheduleMap = {};
+        for (const cId of Object.keys(currentState.schedule)) {
+          newSchedule[cId] = {};
+          const classSched = currentState.schedule[cId];
+          if (classSched) {
+            for (const d of Object.keys(classSched)) {
+              const day = parseInt(d);
+              newSchedule[cId][day] = [];
+              classSched[day]?.forEach((slot, p) => {
+                if (slot?.isLocked) {
+                  newSchedule[cId][day][p] = slot;
+                } else {
+                  newSchedule[cId][day][p] = null;
+                }
+              });
             }
           }
         }
+        currentState = { ...currentState, schedule: newSchedule };
+      }
 
-        if (result.unplacedReports && result.unplacedReports.length > 0) {
-          // Add unplaced reports for this teacher, avoiding duplicates if possible
-          totalUnplaced.push(...result.unplacedReports);
+      let currentGlobalPlaced = 0;
+      // Recalculate initial placed based on the cleared/kept schedule
+      for (const cId of Object.keys(currentState.schedule || {})) {
+        const classSched = currentState.schedule[cId];
+        if (classSched) {
+          for (const d of Object.keys(classSched)) {
+            classSched[parseInt(d)]?.forEach(slot => {
+              if (slot !== null) currentGlobalPlaced++;
+            });
+          }
         }
       }
 
+      const result = await store.dersleri_yerleştir(
+        currentState,
+        store.schedulingKeepExisting,
+        undefined, // target nothing, meaning generate ALL
+        { 
+          deepSearch: store.deepSearch, 
+          numTrials: store.numTrials,
+          extraProgressFields: {
+            globalTotalHours,
+            globalPlacedHours: currentGlobalPlaced
+          }
+        }
+      );
+
+      store.updateState((draft) => {
+        draft.schedule = result.schedule;
+      });
+
+      if (result.unplacedReports) {
+        store.setUnplacedReports(result.unplacedReports);
+      }
+
       if (useAppStore.getState().isScheduling) {
-        const hasUnplaced = totalUnplaced.length > 0;
-        if (!hasUnplaced) {
-          store.showToast("Tüm öğretmenler başarıyla yerleştirildi!", "success");
+        const hasUnplaced = result.unplacedReports && result.unplacedReports.length > 0;
+        if (result.success || !hasUnplaced) {
+          store.showToast("Tüm ders programı başarıyla yerleştirildi ve optimize edildi!", "success");
+          store.setIsAnalysisOpen(false);
         } else {
-          store.setUnplacedReports(totalUnplaced);
+          store.showToast("Program oluşturuldu ancak bazı dersler yerleştirilemedi. 'Yerleştirilemeyenler' paneline bakın.", "warning");
           store.setIsAnalysisOpen(true);
-          store.showToast("Bazı dersler yerleştirilemedi. Lütfen analizi inceleyin.", "info");
         }
       }
     } catch (err) {
@@ -1234,12 +1258,11 @@ export const useAppStore = create<AppStore>((set) => ({
       return;
     }
     const state = store.historyState.current;
-    const tIds = state.teachers.map((t) => t.id);
     
-    if (tIds.length === 0) {
+    if (state.teachers.length === 0) {
       store.showToast("Öncelikle sisteme öğretmen tanımlamalısınız!", "error");
       return;
     }
-    store.runAutomaticScheduler(true, { teacherIds: tIds });
+    store.runAutomaticScheduler(true, undefined);
   },
 }));

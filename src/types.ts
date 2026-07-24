@@ -117,3 +117,22 @@ export interface ConflictInfo {
     courseId?: string;
   };
 }
+
+export interface BlockToPlace {
+  assignment: any;
+  size: number;
+  id: string;
+  isEjected?: boolean;
+}
+
+export interface ProgressUpdate {
+  placedHours?: number;
+  unplacedHours?: number;
+  totalHours?: number;
+  globalTotalHours?: number;
+  globalPlacedHours?: number;
+  globalUnplacedHours?: number;
+  targetTeacherName?: string | null;
+  targetClassName?: string | null;
+}
+

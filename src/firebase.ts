@@ -1,7 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { 
-  getFirestore, 
+  getFirestore,
+  initializeFirestore,
   Firestore, 
   doc, 
   DocumentReference, 
@@ -49,7 +50,7 @@ let appCheck: AppCheck | null = null;
 if (isFirebaseConfigured()) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
+    db = initializeFirestore(app, { experimentalForceLongPolling: true });
     auth = getAuth(app);
     console.log("Firebase initialized successfully.");
 
@@ -91,7 +92,7 @@ export const getFirestoreDb = (): Firestore | null => {
   if (isFirebaseConfigured()) {
     try {
       const activeApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      db = getFirestore(activeApp);
+      db = initializeFirestore(activeApp, { experimentalForceLongPolling: true });
       return db;
     } catch (error) {
       console.error("Failed to initialize Firestore dynamically:", error);

@@ -67,7 +67,7 @@ export default function TeacherAssignmentsTab() {
           : "Hiçbiri";
         const className = draft.classes.find((c) => c.id === assignment.classId)?.name || "Sınıf";
         const courseName = draft.courses.find((c) => c.id === assignment.courseId)?.name || "Ders";
-        showToast(`${className} sınıfının ${courseName} dersine öğretmen(ler) atandı: ${teacherNames}`, "success");
+// removed toast
       }
     });
   };
@@ -96,7 +96,7 @@ export default function TeacherAssignmentsTab() {
         });
       }
     });
-    showToast("Öğretmen ataması kaldırıldı.", "info");
+// removed toast
   };
 
   return (
@@ -186,7 +186,7 @@ export default function TeacherAssignmentsTab() {
                           key={assignment.id}
                           onClick={() => {
                             setAssignmentTabCourseId(assignment.courseId);
-                            showToast(`"${co?.name}" dersi ve "${c?.name}" sınıfı seçildi.`, "info");
+// removed toast
                           }}
                           className="hover:bg-blue-50/60 cursor-pointer transition-colors group"
                         >

@@ -62,7 +62,7 @@ export default function ClassroomsTab() {
           item.shortName = newClassroom.shortName.toLocaleUpperCase("tr-TR");
         }
         setEditingClassroomId(null);
-        showToast("Atölye güncellendi.", "success");
+// removed toast
       } else {
         const id = "cr_" + Date.now();
         const item: Classroom = {
@@ -74,7 +74,7 @@ export default function ClassroomsTab() {
         };
         draft.classrooms.push(item);
         setSelectedClassroomId(id);
-        showToast(`Atölye ${newClassroom.name} sisteme kaydedildi.`, "success");
+// removed toast
       }
     });
     setNewClassroom({ name: "", shortName: "" });
@@ -115,7 +115,7 @@ export default function ClassroomsTab() {
           });
         });
         if (selectedClassroomId === id) setSelectedClassroomId("");
-        showToast("Atölye kaldırıldı.", "info");
+// removed toast
         setConfirmModal(null);
       }
     });
@@ -239,7 +239,7 @@ export default function ClassroomsTab() {
                         setActiveTab("schedule");
                         setScheduleViewMode("classroom");
                         setViewingEntityId(cr.id);
-                        showToast(`"${cr.name}" atölye/derslik programı açıldı.`, "info");
+// removed toast
                       }}>
                         <span className="hover:underline flex items-center gap-1.5" title="Haftalık ders programını görmek için tıklayın">
                           <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -258,7 +258,7 @@ export default function ClassroomsTab() {
                               setActiveTab("schedule");
                               setScheduleViewMode("classroom");
                               setViewingEntityId(cr.id);
-                              showToast(`"${cr.name}" atölye/derslik programı açıldı.`, "info");
+// removed toast
                             }}
                             className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition"
                             title="Ders Programını Gör"
@@ -348,7 +348,7 @@ export default function ClassroomsTab() {
                                 }
                               });
                             });
-                            showToast("Atölye ataması başarıyla kaldırıldı.", "success");
+// removed toast
                           }}
                           className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition shrink-0"
                           title="Atamayı Kaldır"
@@ -476,13 +476,13 @@ export default function ClassroomsTab() {
                     });
 
                     if (workshopConflictCount > 0 && unplacedCount > 0) {
-                      showToast(`${workshopConflictCount} saatlik ders başka bir sınıfla atölye çakışması nedeniyle, ${unplacedCount} saatlik ders ise atölyenin kapalı olması nedeniyle programdan kaldırıldı (yerleşmedi).`, "info");
+// removed toast
                     } else if (workshopConflictCount > 0) {
-                      showToast(`${workshopConflictCount} saatlik ders, bu saatlerde atölye başka bir ders için dolu olduğundan programdan kaldırıldı (yerleşmedi).`, "info");
+// removed toast
                     } else if (unplacedCount > 0) {
-                      showToast(`${unplacedCount} saatlik ders, atölyenin kapalı olduğu saatlere denk geldiği için programdan kaldırıldı (yerleşmedi).`, "info");
+// removed toast
                     } else {
-                      showToast("Sınıf ve ders başarıyla bu atölyeye atandı.", "success");
+// removed toast
                     }
                     setSelectedAssignmentToAssignRoom(""); // reset selection
                   }}

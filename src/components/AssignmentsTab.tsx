@@ -57,7 +57,7 @@ export default function AssignmentsTab() {
       };
       draft.assignments.push(item);
       const className = draft.classes.find((c) => c.id === classId)?.name || "Seçili Sınıf";
-      showToast(`"${course.name}" dersi "${className}" sınıfına başarıyla atandı.`, "success");
+// removed toast
     });
   };
 
@@ -90,7 +90,7 @@ export default function AssignmentsTab() {
             }
           });
         });
-        showToast("Ders dağıtımı kaldırıldı.", "info");
+// removed toast
         setConfirmModal(null);
       }
     });
@@ -142,7 +142,7 @@ export default function AssignmentsTab() {
             });
           });
         });
-        showToast(`${sourceClass.name} sınıfındaki tüm dersler başarıyla ${targetClass.name} sınıfına kopyalandı!`, "success");
+// removed toast
         setConfirmModal(null);
       }
     });

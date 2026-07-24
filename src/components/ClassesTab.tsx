@@ -34,7 +34,7 @@ export default function ClassesTab() {
         const item = draft.classes.find((c) => c.id === editingClassId);
         if (item) item.name = newClass.name;
         setEditingClassId(null);
-        showToast("Sınıf adı güncellendi.", "success");
+// removed toast
       } else {
         const id = "c_" + Date.now();
         const item: GradeClass = {
@@ -48,7 +48,7 @@ export default function ClassesTab() {
           draft.schedule[id][d] = Array(draft.settings.periodsPerDay).fill(null);
         }
         setSelectedClassId(id);
-        showToast(`Sınıf ${newClass.name} sisteme eklendi.`, "success");
+// removed toast
       }
     });
     setNewClass({ name: "" });
@@ -69,7 +69,7 @@ export default function ClassesTab() {
           delete draft.schedule[id];
         });
         if (selectedClassId === id) setSelectedClassId("");
-        showToast("Sınıf ve bağlı ders programı silindi.", "info");
+// removed toast
         setConfirmModal(null);
       }
     });
@@ -162,7 +162,7 @@ export default function ClassesTab() {
                               setActiveTab("schedule");
                               setScheduleViewMode("class");
                               setViewingEntityId(cls.id);
-                              showToast(`"${cls.name}" sınıfının haftalık ders programı açıldı.`, "info");
+// removed toast
                             }}
                             className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition"
                             title="Haftalık Programı Gör"

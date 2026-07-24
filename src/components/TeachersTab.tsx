@@ -36,7 +36,7 @@ export default function TeachersTab() {
           teacher.homeroomClass = newTeacher.homeroomClass.trim();
         }
         setEditingTeacherId(null);
-        showToast("Öğretmen bilgileri güncellendi.", "success");
+// removed toast
       } else {
         // Add Mode
         const id = "t_" + Date.now();
@@ -50,7 +50,7 @@ export default function TeachersTab() {
         };
         draft.teachers.push(teacher);
         setSelectedTeacherId(id);
-        showToast(`Öğretmen ${newTeacher.name} sisteme eklendi.`, "success");
+// removed toast
       }
     });
 
@@ -105,7 +105,7 @@ export default function TeachersTab() {
           });
         });
         if (selectedTeacherId === id) setSelectedTeacherId("");
-        showToast("Öğretmen ve ilgili ders tanımları silindi.", "info");
+// removed toast
         setConfirmModal(null);
       }
     });
