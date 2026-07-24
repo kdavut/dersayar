@@ -1,6 +1,0 @@
-{
-  "name": "Okul Ders Programı Yönetim Sistemi",
-  "description": "Profesyonel ders programı yazılımları düzeyinde, Rubik Küp zincirleme yerleştirme (Ejection Chains) ve küresel optimizasyon motoru içeren okul ders programı hazırlama uygulaması.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

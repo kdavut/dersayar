@@ -1,4 +1,0 @@
-        const failureCount = branchFailureMemory.get(memoryKey) || 0;
-        
-        // Geçmişte bu pozisyon başarısız olduysa, her başarıs�        // Check if current block is more constrained than ANY of the conflicted assignments
-        let isCurrentMoreConstrained = false;
