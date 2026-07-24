@@ -113,7 +113,15 @@ export const loadScheduleFromCloud = async (userId: string): Promise<any> => {
   const scheduleRef = doc(activeDb, "schedules", userId);
   const docSnap = await getDoc(scheduleRef);
   if (docSnap.exists()) {
-    return docSnap.data();
+    const data = docSnap.data();
+    if (data.stateJson) {
+      try {
+        data.state = JSON.parse(data.stateJson);
+      } catch (e) {
+        console.error("Bulut verisi (stateJson) ayrıştırılamadı:", e);
+      }
+    }
+    return data;
   }
   return null;
 };
@@ -123,13 +131,14 @@ export const saveScheduleToCloud = async (userId: string, cleanedState: any, sch
   if (!activeDb) throw new Error("Firestore veritabanına erişilemiyor.");
   const scheduleRef = doc(activeDb, "schedules", userId);
   
+  const stateJson = JSON.stringify(cleanedState);
   const docSnap = await getDoc(scheduleRef);
   if (docSnap.exists()) {
     const existingData = docSnap.data();
     await setDoc(scheduleRef, {
       userId: userId,
       title: schoolName || "Ders Programı",
-      state: cleanedState,
+      stateJson: stateJson,
       createdAt: existingData.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -137,7 +146,7 @@ export const saveScheduleToCloud = async (userId: string, cleanedState: any, sch
     await setDoc(scheduleRef, {
       userId: userId,
       title: schoolName || "Ders Programı",
-      state: cleanedState,
+      stateJson: stateJson,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
