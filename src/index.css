@@ -1,0 +1,378 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* -------------------------------------------------------------
+   CLOCK-WISE ROTATING LED MARQUEE ANIMATION FOR SIDEBAR MAIN HUB
+   ------------------------------------------------------------- */
+@keyframes led-run-top {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
+}
+@keyframes led-run-right {
+  0% { top: -100%; }
+  50%, 100% { top: 100%; }
+}
+@keyframes led-run-bottom {
+  0% { right: -100%; }
+  50%, 100% { right: 100%; }
+}
+@keyframes led-run-left {
+  0% { bottom: -100%; }
+  50%, 100% { bottom: 100%; }
+}
+
+.led-btn-container {
+  position: relative;
+  overflow: hidden !important;
+}
+
+.led-line {
+  position: absolute;
+  display: block;
+  z-index: 10;
+}
+.led-line-top {
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #10b981);
+  animation: led-run-top 2s linear infinite;
+}
+.led-line-right {
+  top: -100%;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, transparent, #3b82f6, #60a5fa, #10b981);
+  animation: led-run-right 2s linear infinite;
+  animation-delay: 0.5s;
+}
+.led-line-bottom {
+  bottom: 0;
+  right: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(270deg, transparent, #3b82f6, #60a5fa, #10b981);
+  animation: led-run-bottom 2s linear infinite;
+  animation-delay: 1s;
+}
+.led-line-left {
+  bottom: -100%;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(360deg, transparent, #3b82f6, #60a5fa, #10b981);
+  animation: led-run-left 2s linear infinite;
+  animation-delay: 1.5s;
+}
+
+/* -------------------------------------------------------------
+   RED RUNNING LED MARQUEE ANIMATION FOR UNSAVED WARNING
+   ------------------------------------------------------------- */
+@keyframes red-led-run-top {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
+}
+@keyframes red-led-run-right {
+  0% { top: -100%; }
+  50%, 100% { top: 100%; }
+}
+@keyframes red-led-run-bottom {
+  0% { right: -100%; }
+  50%, 100% { right: 100%; }
+}
+@keyframes red-led-run-left {
+  0% { bottom: -100%; }
+  50%, 100% { bottom: 100%; }
+}
+
+.red-led-btn-container {
+  position: relative;
+  overflow: hidden !important;
+}
+
+.red-led-line {
+  position: absolute;
+  display: block;
+  z-index: 10;
+}
+.red-led-line-top {
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ef4444, #f43f5e, #fca5a5);
+  animation: red-led-run-top 1.5s linear infinite;
+}
+.red-led-line-right {
+  top: -100%;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, transparent, #ef4444, #f43f5e, #fca5a5);
+  animation: red-led-run-right 1.5s linear infinite;
+  animation-delay: 0.37s;
+}
+.red-led-line-bottom {
+  bottom: 0;
+  right: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(270deg, transparent, #ef4444, #f43f5e, #fca5a5);
+  animation: red-led-run-bottom 1.5s linear infinite;
+  animation-delay: 0.75s;
+}
+.red-led-line-left {
+  bottom: -100%;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(360deg, transparent, #ef4444, #f43f5e, #fca5a5);
+  animation: red-led-run-left 1.5s linear infinite;
+  animation-delay: 1.12s;
+}
+
+@keyframes pulse-glow-rose {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(244, 63, 94, 0.4), 0 0 12px rgba(244, 63, 94, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.9), 0 0 24px rgba(244, 63, 94, 0.6);
+  }
+}
+.animate-pulse-glow-rose {
+  animation: pulse-glow-rose 1.5s infinite ease-in-out;
+}
+
+@keyframes yellow-pulse-border {
+  0%, 100% {
+    border-color: #facc15;
+    box-shadow: 0 0 0 2px #facc15, inset 0 0 12px rgba(250, 204, 21, 0.4);
+  }
+  50% {
+    border-color: #eab308;
+    box-shadow: 0 0 0 6px rgba(234, 179, 8, 0.7), inset 0 0 20px rgba(234, 179, 8, 0.6);
+  }
+}
+
+.animate-yellow-pulse-border {
+  animation: yellow-pulse-border 1.2s infinite ease-in-out;
+  border-width: 3px !important;
+  border-style: solid !important;
+  z-index: 30 !important;
+  position: relative;
+}
+
+.highlight-yellow-border {
+  border: 4px solid #facc15 !important;
+  box-shadow: 0 0 0 2px #ca8a04, inset 0 0 8px rgba(250, 204, 21, 0.5) !important;
+  z-index: 40 !important;
+  position: relative;
+}
+
+.highlight-green-border {
+  border: 4px solid #10b981 !important;
+  box-shadow: 0 0 0 2px #059669, inset 0 0 8px rgba(16, 185, 129, 0.5) !important;
+  z-index: 40 !important;
+  position: relative;
+}
+
+.highlight-orange-border {
+  border: 4px solid #f97316 !important;
+  box-shadow: 0 0 0 2px #ea580c, inset 0 0 8px rgba(249, 115, 22, 0.5) !important;
+  z-index: 40 !important;
+  position: relative;
+}
+
+/* -------------------------------------------------------------
+   PRINT MEDIA RULES FOR PROFESSIONAL A4 PORTRAIT / LANDSCAPE
+   ------------------------------------------------------------- */
+@media print {
+  /* Set body font & background */
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: "Inter", sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Reset layout on all parent containers of the print section to allow normal block flow printing */
+  #root,
+  #school-scheduler,
+  #scheduler-body,
+  #scheduler-main {
+    display: block !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: static !important;
+  }
+
+  /* Completely hide header, sidebar, active screen tab content, fixed components (modals/toasts), and any no-print items */
+  header,
+  aside,
+  #active-tab-container,
+  .fixed,
+  .no-print {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+  }
+
+  /* Force print section to be visible and occupy full width */
+  #print-section {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  /* Page Break & Sizing for portrait pages (each teacher/class 1 page) */
+  .print-page {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 4mm 6mm !important;
+    background: white !important;
+    color: black !important;
+    overflow: hidden !important;
+    height: 265mm !important; /* Safe height for exactly 1 A4 page with default print margins */
+    max-height: 265mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-page:not(:last-child) {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* Force table layout for clean printed borders */
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 6px !important;
+  }
+
+  /* Zebra striping for alternating table rows */
+  .print-table tbody tr:nth-child(even) td {
+    background-color: #f1f5f9 !important;
+  }
+
+  /* Make row headers (teacher, class name columns) distinct */
+  .print-table tbody tr td:first-child {
+    background-color: #e2e8f0 !important;
+    font-weight: bold !important;
+    border-right: 2px solid #000 !important;
+  }
+
+  /* Zebra patterns for printed carsaf sheets are now handled dynamically in React using user's 5 repeating colors */
+
+  /* Thick borders for day groups */
+  .border-thick-right {
+    border-right: 3px solid #000 !important;
+  }
+
+  /* High contrast day and period column headers */
+  .print-table th,
+  .print-carsaf-table th {
+    background-color: #cbd5e1 !important;
+    color: #000 !important;
+    border: 2px solid #000 !important;
+    font-weight: 800 !important;
+    font-size: 8px !important;
+    padding: 2px 2px !important;
+    text-align: center !important;
+  }
+
+  .print-table td {
+    border: 1.5px solid #000 !important;
+    font-size: 7.5px !important;
+    padding: 1.5px 2px !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    background: transparent !important;
+    color: #000 !important;
+    line-height: 1.1 !important;
+  }
+
+  /* Official header styles */
+  .official-header {
+    text-align: center !important;
+    margin-bottom: 6px !important;
+    font-weight: bold !important;
+    color: black !important;
+  }
+
+  .official-meta {
+    width: 100% !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+    font-size: 9px !important;
+  }
+
+  .official-text {
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+    margin-bottom: 6px !important;
+    text-align: justify !important;
+  }
+
+  .official-signature {
+    float: right !important;
+    text-align: center !important;
+    margin-top: 8px !important;
+    margin-right: 10px !important;
+    font-size: 9px !important;
+  }
+
+  /* Landscape çarşaf styles */
+  .print-carsaf-page {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    background: white !important;
+    color: black !important;
+    padding: 5mm !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .print-carsaf-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+  }
+
+  .print-carsaf-table th, .print-carsaf-table td {
+    border: 1.5px solid #000 !important;
+    font-size: 8px !important;
+    padding: 4px 2px !important;
+    text-align: center !important;
+    white-space: normal !important;
+    word-break: break-all !important;
+  }
+}
+
+/* Hide print-section on screen */
+@media screen {
+  #print-section {
+    display: none !important;
+  }
+}
+

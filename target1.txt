@@ -1,0 +1,14 @@
+        if (sourceD !== targetD) {
+          const classDaySched = currentSchedule[classId]?.[targetD];
+          if (classDaySched) {
+            const hasOtherSameCourse = classDaySched.some((s, sIdx) => 
+               s !== null && 
+               s.assignmentId !== assignmentId &&
+               s.courseId === assignObj.courseId
+            );
+            if (hasOtherSameCourse) {
+              return false;
+            }
+          }
+        }
+

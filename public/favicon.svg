@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Vibrant Royal Blue (Saks Mavisi) gradients -->
+    <linearGradient id="saksGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A" /> <!-- Deep Royal -->
+      <stop offset="40%" stop-color="#2563EB" /> <!-- Saks Mavisi / Royal Blue -->
+      <stop offset="100%" stop-color="#3B82F6" /> <!-- Bright Cobalt -->
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1D4ED8" />
+      <stop offset="100%" stop-color="#60A5FA" />
+    </linearGradient>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#1E3A8A" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Modern Education & Timetable Concept: An open, dynamic book whose pages transform into a weekly schedule grid -->
+  <g filter="url(#softShadow)">
+    <!-- Book Spine / Center Pivot -->
+    <path d="M 256 160 L 256 440" stroke="url(#saksGradient)" stroke-width="12" stroke-linecap="round" />
+
+    <!-- Left Page (Open Book representing Education / "Ders") -->
+    <path d="M 256 160 
+             C 210 120, 110 120, 70 140 
+             L 70 380 
+             C 110 360, 210 360, 256 400 
+             Z" 
+          fill="url(#saksGradient)" />
+
+    <!-- Right Page (Transforming into dynamic timetable slots representing "Sayar") -->
+    <path d="M 256 160 
+             C 302 120, 402 120, 442 140 
+             L 442 380 
+             C 402 360, 302 360, 256 400 
+             Z" 
+          fill="url(#accentGradient)" />
+
+    <!-- Left Page Educational Details (Sleek minimalist lines representing lesson rows) -->
+    <line x1="110" y1="200" x2="210" y2="200" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.85" />
+    <line x1="110" y1="250" x2="190" y2="250" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.85" />
+    <line x1="110" y1="300" x2="210" y2="300" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.85" />
+
+    <!-- Right Page Timetable Grid (Modern overlapping scheduled slots) -->
+    <!-- Grid Slot 1 -->
+    <rect x="290" y="180" width="55" height="40" rx="6" fill="#FFFFFF" fill-opacity="0.9" />
+    <!-- Grid Slot 2 -->
+    <rect x="360" y="180" width="55" height="40" rx="6" fill="#FFFFFF" fill-opacity="0.5" />
+    <!-- Grid Slot 3 -->
+    <rect x="290" y="240" width="55" height="40" rx="6" fill="#FFFFFF" fill-opacity="0.5" />
+    <!-- Grid Slot 4 -->
+    <rect x="360" y="240" width="55" height="40" rx="6" fill="#FFFFFF" fill-opacity="0.9" />
+    <!-- Grid Slot 5 -->
+    <rect x="290" y="300" width="125" height="40" rx="6" fill="#FFFFFF" fill-opacity="0.8" />
+
+    <!-- Modern Academic Graduation Cap floating elegantly above the book -->
+    <!-- Cap Diamond -->
+    <path d="M 256 40 L 326 70 L 256 100 L 186 70 Z" fill="url(#saksGradient)" />
+    <!-- Cap Base -->
+    <path d="M 216 83 L 216 105 C 216 115, 296 115, 296 105 L 296 83" fill="#1E3A8A" opacity="0.9" />
+    <!-- Cap Tassel -->
+    <path d="M 326 70 L 346 115 L 346 125" fill="none" stroke="url(#accentGradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="346" cy="127" r="4" fill="#60A5FA" />
+  </g>
+</svg>

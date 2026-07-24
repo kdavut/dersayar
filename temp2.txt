@@ -1,0 +1,21 @@
+        // Base ejection penalty is 1000 so that empty slots (score 0) are always prioritized.
+        score = (isCurrentMoreConstrained || isAggressiveOrDeepActive)
+          ? 1000 + cand.conflicts.length * 10
+          : 100000 + cand.conflicts.length * 100;
+        
+        score -= ejectedFlexibilityBonus;
+        if (score < 10) score = 10; // Ejection penalty never goes below 10 (empty slot is 0)ictly more constrained.
+        // Base ejection penalty is 1000 so that empty slots (score 0) are always prioritized.
+        score = (isCurrentMoreConstrained || isAggressiveOrDeepActive)
+          ? 1000 + cand.conflicts.length * 10
+          : 100000 + cand.conflicts.length * 100;
+
+        if (hasLockedOrPriorityConflict) {
+          score *= 10; // Apply significantly higher (10x) penalty for ejecting locked/priority slots
+        }
+
+        if (hasSoftLockedConflict && isAggressiveOrDeepActive) {
+          // Öğretmen hedefli (Targeted) modda, diğer öğretmenlerin derslerini kaydırmayı çok daha
+          // kolaylaştırıyoruz ("kaygan zemin"). Aksi takdirde +50000 ceza yüzünden hiç itme yapmaz.
+          score += isTargeted ? 1500 : 50000;
+        }
