@@ -83,7 +83,7 @@ import {
   optimizeGapsForAllTeachers as runOptimizeGapsForAllTeachers,
   removeSingleLessonDays as runRemoveSingleLessonDays,
   removeSingleLessonDaysForTeacher as runRemoveSingleLessonDaysForTeacher
-} from "./utils/gapOptimizer";
+} from "./utils/scheduler";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import Login from "./components/Login";
